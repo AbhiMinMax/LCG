@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test PWA</title>
+    
+    <!-- PWA Meta -->
+    <meta name="theme-color" content="#646cff">
+    <link rel="manifest" href="test-manifest.json">
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background: #f0f0f0;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .standalone {
+            background: #d4edda;
+            color: #155724;
+        }
+        .browser {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>Minimal PWA Test</h1>
+    
+    <div id="status" class="status">
+        Checking display mode...
+    </div>
+    
+    <p>Install this app and launch from home screen.</p>
+    <p>It should open WITHOUT browser address bar.</p>
+    
+    <script>
+        // Check display mode
+        const statusEl = document.getElementById('status');
+        
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+            statusEl.textContent = '✅ STANDALONE MODE - SUCCESS!';
+            statusEl.className = 'status standalone';
+        } else {
+            statusEl.textContent = '❌ Browser mode - Install and launch from home screen';
+            statusEl.className = 'status browser';
+        }
+        
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('test-sw.js')
+                .then(reg => console.log('SW registered'))
+                .catch(err => console.log('SW registration failed'));
+        }
+    </script>
+</body>
+</html>

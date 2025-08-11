@@ -1,0 +1,581 @@
+/* Progress Screen Styles */
+.screen {
+  padding-bottom: 20px;
+}
+
+.screen h2 {
+  margin-bottom: 20px;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 15px;
+  background: var(--choice-selected);
+  border-radius: 8px;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 5px;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sort-controls .form-label {
+  margin-bottom: 0;
+  font-size: 0.9rem;
+}
+
+.sort-controls .form-select {
+  flex: 1;
+  max-width: 200px;
+}
+
+.opportunities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.opportunity-card {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.opportunity-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--shadow-hover);
+}
+
+.opportunity-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.opportunity-info {
+  flex: 1;
+}
+
+.opportunity-title {
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.opportunity-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.expand-icon {
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  padding: 5px;
+}
+
+.progress-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.progress-section .progress-bar {
+  flex: 1;
+}
+
+.progress-percentage {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 35px;
+  text-align: right;
+}
+
+.opportunity-details {
+  border-top: 1px solid var(--border-color);
+  padding-top: 15px;
+  margin-top: 15px;
+}
+
+.detail-section {
+  margin-bottom: 20px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section h4 {
+  margin: 0 0 10px 0;
+  font-size: 1rem;
+  color: #333;
+}
+
+.detail-section p {
+  margin: 0;
+  color: #666;
+  line-height: 1.5;
+}
+
+.progress-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  font-weight: 500;
+  color: #666;
+}
+
+.detail-value {
+  font-weight: 600;
+  color: #333;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.empty-state h3 {
+  margin-bottom: 10px;
+  color: #999;
+}
+
+.success-card {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  margin-bottom: 20px;
+}
+
+.success-card h3 {
+  margin: 0 0 10px 0;
+}
+
+.success-card ul {
+  margin: 10px 0 0 0;
+  padding-left: 20px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.form-actions .btn {
+  flex: 1;
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .opportunity-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .opportunity-meta {
+    justify-content: space-between;
+    width: 100%;
+  }
+  
+  .expand-icon {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+}
+
+/* History Screen Specific Styles */
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.event-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.event-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.event-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.event-meta {
+  flex: 1;
+}
+
+.event-time {
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.event-situation {
+  font-size: 1rem;
+  color: #333;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.event-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.xp-change {
+  font-size: 0.9rem;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.event-preview {
+  margin-bottom: 15px;
+}
+
+.event-preview p {
+  margin: 0 0 10px 0;
+  color: #666;
+  line-height: 1.5;
+}
+
+.choice-indicator {
+  display: inline-block;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.situation-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.affected-opportunities {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.opportunities-count {
+  color: #646cff;
+  font-weight: 500;
+}
+
+.no-opportunities {
+  color: #999;
+  font-style: italic;
+}
+
+.avg-stat {
+  display: flex;
+  justify-content: center;
+  margin-top: 15px;
+}
+
+/* Customize Screen Styles */
+.tab-navigation {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 0;
+  flex-wrap: wrap;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 12px 20px;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  border-color: var(--border-hover);
+  color: var(--accent);
+}
+
+.tab-button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.tab-content {
+  margin-top: 20px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.section-header h3 {
+  margin: 0;
+}
+
+.form-card {
+  background: #f8f9fa;
+  border: 2px solid #e0e0e0;
+  margin-bottom: 20px;
+}
+
+.form-card h4 {
+  margin: 0 0 20px 0;
+  color: #333;
+}
+
+.opportunities-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.checkbox-item:hover {
+  background: #f8f9fa;
+}
+
+.checkbox-item input[type="checkbox"] {
+  margin: 0;
+}
+
+.items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.item-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.item-title-section {
+  flex: 1;
+}
+
+.item-title-section h4 {
+  margin: 0 0 5px 0;
+  color: #333;
+}
+
+.opportunity-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.item-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  padding: 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-icon:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.item-description {
+  margin: 0 0 15px 0;
+  color: #666;
+  line-height: 1.5;
+}
+
+.item-meta {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 15px;
+}
+
+.linked-opportunities strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.opportunity-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.opportunity-tag {
+  background: rgba(100, 108, 255, 0.1);
+  color: #646cff;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.no-links {
+  color: #999;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .event-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .event-summary {
+    align-self: flex-end;
+  }
+  
+  .tab-navigation {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .tab-button {
+    flex: none;
+    min-width: auto;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .item-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .item-actions {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .stat-value {
+    font-size: 1.2rem;
+  }
+  
+  .sort-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .sort-controls .form-select {
+    max-width: none;
+  }
+  
+  .opportunity-tags {
+    flex-direction: column;
+  }
+  
+  .opportunity-tag {
+    align-self: flex-start;
+  }
+}
