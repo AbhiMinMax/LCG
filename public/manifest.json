@@ -1,50 +1,35 @@
 {
   "name": "Life Progress Tracker",
   "short_name": "Life Progress",
-  "start_url": "/",
+  "start_url": "/LCG/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#646cff",
-  "scope": "/",
+  "scope": "/LCG/",
   "icons": [
     {
-      "src": "/pwa-192x192.svg",
+      "src": "/pwa-192x192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-192x192.svg",
+      "src": "/pwa-192x192.png",
       "sizes": "192x192", 
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-512x512.svg",
+      "src": "/pwa-512x512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-512x512.svg",
+      "src": "/pwa-512x512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshot-wide.svg",
-      "sizes": "1280x640",
-      "type": "image/svg+xml",
-      "form_factor": "wide",
-      "label": "Desktop view of ReactPWA"
-    },
-    {
-      "src": "/screenshot-mobile.svg", 
-      "sizes": "640x1280",
-      "type": "image/svg+xml",
-      "label": "Mobile view of ReactPWA"
     }
   ]
 }
