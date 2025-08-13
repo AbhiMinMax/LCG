@@ -16,7 +16,8 @@
       "Bash(git push:*)",
       "Bash(mkdir:*)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:abhiminmax.github.io)"
+      "WebFetch(domain:abhiminmax.github.io)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }
