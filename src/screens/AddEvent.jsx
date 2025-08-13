@@ -10,6 +10,8 @@ const CHOICE_OPTIONS = [
 
 function AddEvent() {
   const [situations, setSituations] = useState([]);
+  const [filteredSituations, setFilteredSituations] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedSituation, setSelectedSituation] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [selectedChoice, setSelectedChoice] = useState('');
@@ -44,6 +46,7 @@ function AddEvent() {
     try {
       const situationsData = await dbHelpers.getSituationsWithOpportunities();
       setSituations(situationsData);
+      setFilteredSituations(situationsData);
     } catch (error) {
       console.error('Error loading situations:', error);
     } finally {
@@ -51,6 +54,23 @@ function AddEvent() {
     }
   };
 
+  const handleSearchChange = (e) => {
+    const query = e.target.value.toLowerCase();
+    setSearchQuery(query);
+    
+    if (!query.trim()) {
+      setFilteredSituations(situations);
+      return;
+    }
+    
+    const filtered = situations.filter(situation => 
+      situation.title.toLowerCase().includes(query) ||
+      situation.description.toLowerCase().includes(query) ||
+      (situation.tags && situation.tags.some(tag => tag.toLowerCase().includes(query)))
+    );
+    
+    setFilteredSituations(filtered);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -94,6 +114,8 @@ function AddEvent() {
     setEventDescription('');
     setSelectedChoice('');
     setAffectedOpportunities([]);
+    setSearchQuery('');
+    setFilteredSituations(situations);
   };
 
   const getChoiceXp = () => {
@@ -136,8 +158,22 @@ function AddEvent() {
       <form onSubmit={handleSubmit}>
         <div className="card">
           <div className="form-group">
+            <label htmlFor="search" className="form-label">
+              Search Situations
+            </label>
+            <input
+              id="search"
+              type="text"
+              className="form-input"
+              placeholder="Search by title, description, or tags..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+            />
+          </div>
+          
+          <div className="form-group">
             <label htmlFor="situation" className="form-label">
-              Life Situation *
+              Life Situation * {filteredSituations.length !== situations.length && `(${filteredSituations.length} of ${situations.length})`}
             </label>
             <select
               id="situation"
@@ -147,12 +183,17 @@ function AddEvent() {
               required
             >
               <option value="">Select a situation...</option>
-              {situations.map(situation => (
+              {filteredSituations.map(situation => (
                 <option key={situation.id} value={situation.id}>
                   {situation.title} {situation.tags && situation.tags.length > 0 && `[${situation.tags.join(', ')}]`}
                 </option>
               ))}
             </select>
+            {filteredSituations.length === 0 && searchQuery && (
+              <div style={{fontSize: '0.9em', color: '#666', marginTop: '8px'}}>
+                No situations found matching "{searchQuery}"
+              </div>
+            )}
           </div>
 
           <div className="form-group">

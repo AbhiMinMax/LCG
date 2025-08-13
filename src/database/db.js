@@ -439,6 +439,103 @@ export const dbHelpers = {
     if (links.length > 0) {
       await db.situation_opportunities.bulkAdd(links);
     }
+  },
+
+  // Export all data as JSON
+  async exportAllData() {
+    try {
+      const [situations, opportunities, situationOpportunities, events] = await Promise.all([
+        db.situations.toArray(),
+        db.opportunities.toArray(),
+        db.situation_opportunities.toArray(),
+        db.events.toArray()
+      ]);
+
+      const exportData = {
+        version: "1.0",
+        exportDate: new Date().toISOString(),
+        data: {
+          situations,
+          opportunities,
+          situation_opportunities: situationOpportunities,
+          events
+        }
+      };
+
+      return exportData;
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      throw error;
+    }
+  },
+
+  // Import data from JSON
+  async importAllData(importData) {
+    try {
+      // Validate import data structure
+      if (!importData || !importData.data) {
+        throw new Error('Invalid import data format');
+      }
+
+      const { situations, opportunities, situation_opportunities, events } = importData.data;
+
+      // Clear existing data
+      await Promise.all([
+        db.events.clear(),
+        db.situation_opportunities.clear(),
+        db.opportunities.clear(),
+        db.situations.clear()
+      ]);
+
+      // Import data in correct order to maintain relationships
+      if (situations && situations.length > 0) {
+        await db.situations.bulkAdd(situations);
+      }
+      
+      if (opportunities && opportunities.length > 0) {
+        await db.opportunities.bulkAdd(opportunities);
+      }
+      
+      if (situation_opportunities && situation_opportunities.length > 0) {
+        await db.situation_opportunities.bulkAdd(situation_opportunities);
+      }
+      
+      if (events && events.length > 0) {
+        await db.events.bulkAdd(events);
+      }
+
+      return {
+        situationsCount: situations?.length || 0,
+        opportunitiesCount: opportunities?.length || 0,
+        linksCount: situation_opportunities?.length || 0,
+        eventsCount: events?.length || 0
+      };
+    } catch (error) {
+      console.error('Error importing data:', error);
+      throw error;
+    }
+  },
+
+  // Get data statistics for export confirmation
+  async getDataStats() {
+    try {
+      const [situationCount, opportunityCount, linkCount, eventCount] = await Promise.all([
+        db.situations.count(),
+        db.opportunities.count(),
+        db.situation_opportunities.count(),
+        db.events.count()
+      ]);
+
+      return {
+        situations: situationCount,
+        opportunities: opportunityCount,
+        links: linkCount,
+        events: eventCount
+      };
+    } catch (error) {
+      console.error('Error getting data stats:', error);
+      throw error;
+    }
   }
 };
 

@@ -9,12 +9,26 @@ function Customize() {
   
   console.log('Customize component rendered, activeTab:', activeTab);
   const [situations, setSituations] = useState([]);
+  const [allSituations, setAllSituations] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
+  const [allOpportunities, setAllOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
   
   // Available tags for suggestions
   const [availableSituationTags, setAvailableSituationTags] = useState([]);
   const [availableOpportunityTags, setAvailableOpportunityTags] = useState([]);
+  
+  // Filter and sort states
+  const [selectedSituationTags, setSelectedSituationTags] = useState([]);
+  const [selectedOpportunityTags, setSelectedOpportunityTags] = useState([]);
+  const [situationSortBy, setSituationSortBy] = useState('alphabetical');
+  const [opportunitySortBy, setOpportunitySortBy] = useState('alphabetical');
+  
+  // Export/Import states
+  const [dataStats, setDataStats] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
   
   // Form states
   const [showSituationForm, setShowSituationForm] = useState(false);
@@ -38,7 +52,76 @@ function Customize() {
 
   useEffect(() => {
     loadData();
+    loadDataStats();
   }, []);
+
+  useEffect(() => {
+    const filterAndSortSituations = () => {
+      let filtered = allSituations;
+      
+      if (selectedSituationTags.length > 0) {
+        filtered = allSituations.filter(situation => 
+          situation.tags && 
+          Array.isArray(situation.tags) &&
+          selectedSituationTags.some(tag => situation.tags.includes(tag))
+        );
+      }
+      
+      switch (situationSortBy) {
+        case 'alphabetical':
+          filtered.sort((a, b) => a.title.localeCompare(b.title));
+          break;
+        case 'created':
+          filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          break;
+        case 'updated':
+          filtered.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+          break;
+      }
+      
+      setSituations(filtered);
+    };
+    
+    filterAndSortSituations();
+  }, [situationSortBy, selectedSituationTags, allSituations]);
+
+  useEffect(() => {
+    const filterAndSortOpportunities = () => {
+      let filtered = allOpportunities;
+      
+      if (selectedOpportunityTags.length > 0) {
+        filtered = allOpportunities.filter(opportunity => 
+          opportunity.tags && 
+          Array.isArray(opportunity.tags) &&
+          selectedOpportunityTags.some(tag => opportunity.tags.includes(tag))
+        );
+      }
+      
+      switch (opportunitySortBy) {
+        case 'alphabetical':
+          filtered.sort((a, b) => a.title.localeCompare(b.title));
+          break;
+        case 'level':
+          filtered.sort((a, b) => {
+            if (b.current_level !== a.current_level) {
+              return b.current_level - a.current_level;
+            }
+            return b.current_xp - a.current_xp;
+          });
+          break;
+        case 'xp':
+          filtered.sort((a, b) => b.current_xp - a.current_xp);
+          break;
+        case 'created':
+          filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          break;
+      }
+      
+      setOpportunities(filtered);
+    };
+    
+    filterAndSortOpportunities();
+  }, [opportunitySortBy, selectedOpportunityTags, allOpportunities]);
 
   const loadData = async () => {
     try {
@@ -48,7 +131,9 @@ function Customize() {
         dbHelpers.getAllSituationTags(),
         dbHelpers.getAllOpportunityTags()
       ]);
+      setAllSituations(situationsData);
       setSituations(situationsData);
+      setAllOpportunities(opportunitiesData);
       setOpportunities(opportunitiesData);
       setAvailableSituationTags(sitTags);
       setAvailableOpportunityTags(oppTags);
@@ -56,6 +141,15 @@ function Customize() {
       console.error('Error loading data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDataStats = async () => {
+    try {
+      const stats = await dbHelpers.getDataStats();
+      setDataStats(stats);
+    } catch (error) {
+      console.error('Error loading data stats:', error);
     }
   };
 
@@ -224,6 +318,103 @@ function Customize() {
     setSituationForm({ ...situationForm, linkedOpportunities: newLinks });
   };
 
+  // Tag filter functions
+  const toggleSituationTag = (tag) => {
+    setSelectedSituationTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+  };
+
+  const toggleOpportunityTag = (tag) => {
+    setSelectedOpportunityTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+  };
+
+  // Export functionality
+  const handleExportData = async () => {
+    if (!dataStats || dataStats.situations === 0) {
+      alert('No data to export. Add some situations and opportunities first.');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const exportData = await dbHelpers.exportAllData();
+      
+      // Create and download file
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { 
+        type: 'application/json' 
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `life-progress-tracker-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Import functionality
+  const handleImportData = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = handleFileSelect;
+    input.click();
+  };
+
+  const handleFileSelect = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!confirm('This will replace all existing data. Are you sure you want to continue?')) {
+      return;
+    }
+
+    setImporting(true);
+    setImportResult(null);
+
+    try {
+      const text = await file.text();
+      const importData = JSON.parse(text);
+      
+      // Validate the import data
+      if (!importData.data || !importData.data.situations) {
+        throw new Error('Invalid file format. Please select a valid export file.');
+      }
+
+      const result = await dbHelpers.importAllData(importData);
+      setImportResult(result);
+      
+      // Reload all data
+      await loadData();
+      await loadDataStats();
+      
+      // Clear filters
+      setSelectedSituationTags([]);
+      setSelectedOpportunityTags([]);
+
+    } catch (error) {
+      console.error('Import failed:', error);
+      alert(`Import failed: ${error.message}`);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="screen">
@@ -276,6 +467,71 @@ function Customize() {
               </button>
             </div>
           </div>
+
+          {/* Sort Controls for Situations */}
+          <div className="card">
+            <div className="sort-controls">
+              <label htmlFor="situationSort" className="form-label">Sort by:</label>
+              <select
+                id="situationSort"
+                className="form-select"
+                value={situationSortBy}
+                onChange={(e) => setSituationSortBy(e.target.value)}
+              >
+                <option value="alphabetical">A-Z</option>
+                <option value="created">Newest First</option>
+                <option value="updated">Recently Updated</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Tag Filter for Situations */}
+          {availableSituationTags.length > 0 && (
+            <div className="card">
+              <h3>🏷️ Filter by Tags</h3>
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px'}}>
+                {availableSituationTags.map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => toggleSituationTag(tag)}
+                    style={{
+                      padding: '6px 12px',
+                      border: selectedSituationTags.includes(tag) ? '2px solid #28a745' : '1px solid #ccc',
+                      borderRadius: '16px',
+                      background: selectedSituationTags.includes(tag) ? '#d4edda' : '#f5f5f5',
+                      color: selectedSituationTags.includes(tag) ? '#155724' : '#666',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: selectedSituationTags.includes(tag) ? 'bold' : 'normal'
+                    }}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+              {selectedSituationTags.length > 0 && (
+                <div style={{marginTop: '12px'}}>
+                  <button
+                    onClick={() => setSelectedSituationTags([])}
+                    style={{
+                      padding: '4px 8px',
+                      border: '1px solid #dc3545',
+                      borderRadius: '12px',
+                      background: '#f8d7da',
+                      color: '#721c24',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem'
+                    }}
+                  >
+                    Clear Filters
+                  </button>
+                  <span style={{marginLeft: '12px', fontSize: '0.9rem', color: '#666'}}>
+                    Showing {situations.length} of {allSituations.length} situations
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Situation Form */}
           {showSituationForm && (
@@ -423,6 +679,72 @@ function Customize() {
               </button>
             </div>
           </div>
+
+          {/* Sort Controls for Opportunities */}
+          <div className="card">
+            <div className="sort-controls">
+              <label htmlFor="opportunitySort" className="form-label">Sort by:</label>
+              <select
+                id="opportunitySort"
+                className="form-select"
+                value={opportunitySortBy}
+                onChange={(e) => setOpportunitySortBy(e.target.value)}
+              >
+                <option value="alphabetical">A-Z</option>
+                <option value="level">Level</option>
+                <option value="xp">XP Progress</option>
+                <option value="created">Newest First</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Tag Filter for Opportunities */}
+          {availableOpportunityTags.length > 0 && (
+            <div className="card">
+              <h3>🏷️ Filter by Tags</h3>
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px'}}>
+                {availableOpportunityTags.map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => toggleOpportunityTag(tag)}
+                    style={{
+                      padding: '6px 12px',
+                      border: selectedOpportunityTags.includes(tag) ? '2px solid #1976d2' : '1px solid #ccc',
+                      borderRadius: '16px',
+                      background: selectedOpportunityTags.includes(tag) ? '#e3f2fd' : '#f5f5f5',
+                      color: selectedOpportunityTags.includes(tag) ? '#1976d2' : '#666',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: selectedOpportunityTags.includes(tag) ? 'bold' : 'normal'
+                    }}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+              {selectedOpportunityTags.length > 0 && (
+                <div style={{marginTop: '12px'}}>
+                  <button
+                    onClick={() => setSelectedOpportunityTags([])}
+                    style={{
+                      padding: '4px 8px',
+                      border: '1px solid #dc3545',
+                      borderRadius: '12px',
+                      background: '#f8d7da',
+                      color: '#721c24',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem'
+                    }}
+                  >
+                    Clear Filters
+                  </button>
+                  <span style={{marginLeft: '12px', fontSize: '0.9rem', color: '#666'}}>
+                    Showing {opportunities.length} of {allOpportunities.length} opportunities
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Opportunity Form */}
           {showOpportunityForm && (
@@ -588,6 +910,106 @@ function Customize() {
               <p style={{margin: '0', fontSize: '0.9rem', color: 'var(--text-secondary)'}}>
                 Add custom tags when creating situations and opportunities. Use the filter feature in Progress screen to find items by tags.
               </p>
+            </div>
+          </div>
+
+          {/* Data Export/Import */}
+          <div className="card">
+            <h3>📤 Data Management</h3>
+            
+            {dataStats && (
+              <div style={{
+                background: 'var(--bg-tertiary)',
+                padding: '15px',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <h4 style={{margin: '0 0 12px 0', fontSize: '1rem'}}>📊 Current Data</h4>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                  gap: '12px',
+                  fontSize: '0.9rem'
+                }}>
+                  <div>
+                    <strong>{dataStats.situations}</strong>
+                    <div style={{color: 'var(--text-secondary)'}}>Situations</div>
+                  </div>
+                  <div>
+                    <strong>{dataStats.opportunities}</strong>
+                    <div style={{color: 'var(--text-secondary)'}}>Opportunities</div>
+                  </div>
+                  <div>
+                    <strong>{dataStats.links}</strong>
+                    <div style={{color: 'var(--text-secondary)'}}>Links</div>
+                  </div>
+                  <div>
+                    <strong>{dataStats.events}</strong>
+                    <div style={{color: 'var(--text-secondary)'}}>Events</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              marginBottom: '20px',
+              flexWrap: 'wrap'
+            }}>
+              <button
+                className="btn btn-primary"
+                onClick={handleExportData}
+                disabled={exporting || !dataStats || dataStats.situations === 0}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {exporting ? '⏳' : '📤'} 
+                {exporting ? 'Exporting...' : 'Export All Data'}
+              </button>
+              
+              <button
+                className="btn btn-secondary"
+                onClick={handleImportData}
+                disabled={importing}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {importing ? '⏳' : '📥'} 
+                {importing ? 'Importing...' : 'Import Data'}
+              </button>
+            </div>
+
+            {importResult && (
+              <div style={{
+                background: '#d4edda',
+                border: '1px solid #c3e6cb',
+                color: '#155724',
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <h4 style={{margin: '0 0 8px 0'}}>✅ Import Successful!</h4>
+                <div style={{fontSize: '0.9rem'}}>
+                  Imported: {importResult.situationsCount} situations, {importResult.opportunitiesCount} opportunities, {importResult.linksCount} links, {importResult.eventsCount} events
+                </div>
+              </div>
+            )}
+
+            <div style={{
+              fontSize: '0.85rem',
+              color: 'var(--text-secondary)',
+              lineHeight: '1.4'
+            }}>
+              <p><strong>Export:</strong> Download all your data as a JSON file for backup or transfer.</p>
+              <p><strong>Import:</strong> Upload a previously exported JSON file. This will replace all current data.</p>
+              <p><strong>⚠️ Warning:</strong> Import will permanently delete all existing data. Make sure to export first if you want to keep your current data.</p>
             </div>
           </div>
 
