@@ -13,7 +13,10 @@
       "Bash(rm:*)",
       "Bash(git commit:*)",
       "Bash(git remote set-url:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(mkdir:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:abhiminmax.github.io)"
     ],
     "deny": []
   }
