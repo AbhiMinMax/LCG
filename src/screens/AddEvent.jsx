@@ -196,6 +196,23 @@ function AddEvent() {
             )}
           </div>
 
+          {selectedSituation && (
+            <div className="form-group">
+              <label className="form-label">Situation Description</label>
+              <div style={{
+                padding: '12px',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e9ecef',
+                borderRadius: '6px',
+                fontSize: '0.95em',
+                color: '#495057',
+                lineHeight: '1.5'
+              }}>
+                {filteredSituations.find(s => s.id === parseInt(selectedSituation))?.description}
+              </div>
+            </div>
+          )}
+
           <div className="form-group">
             <label htmlFor="description" className="form-label">
               Event Description *
