@@ -8,6 +8,7 @@ import AddEvent from './screens/AddEvent';
 import CheckProgress from './screens/CheckProgress';
 import CheckHistory from './screens/CheckHistory';
 import Customize from './screens/Customize';
+import Analytics from './screens/Analytics';
 import './App.css';
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
               <Route path="/add-event" element={<AddEvent />} />
               <Route path="/progress" element={<CheckProgress />} />
               <Route path="/history" element={<CheckHistory />} />
+              <Route path="/analytics" element={<Analytics />} />
               <Route path="/customize" element={<Customize />} />
             </Routes>
           </main>

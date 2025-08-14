@@ -29,6 +29,14 @@ function Navigation() {
       </NavLink>
       
       <NavLink 
+        to="/analytics" 
+        className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+      >
+        <span className="nav-icon">📈</span>
+        <span className="nav-label">Analytics</span>
+      </NavLink>
+      
+      <NavLink 
         to="/customize" 
         className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
       >
