@@ -136,7 +136,7 @@ export class PantryService {
     try {
       const result = await this.makeRequest(
         user.pantryId,
-        'user-data',
+        'LCG',
         'POST',
         dataToSave
       );
@@ -159,7 +159,7 @@ export class PantryService {
     try {
       const result = await this.makeRequest(
         user.pantryId,
-        'user-data',
+        'LCG',
         'GET'
       );
       
@@ -198,7 +198,7 @@ export class PantryService {
 
       const result = await this.makeRequest(
         user.pantryId,
-        'user-data',
+        'LCG',
         'PUT',
         updatedData
       );
@@ -221,7 +221,7 @@ export class PantryService {
     try {
       const result = await this.makeRequest(
         user.pantryId,
-        'user-data',
+        'LCG',
         'DELETE'
       );
       

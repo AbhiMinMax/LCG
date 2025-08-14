@@ -19,7 +19,9 @@
       "WebFetch(domain:abhiminmax.github.io)",
       "Bash(mv:*)",
       "Bash(git checkout:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(git branch:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
