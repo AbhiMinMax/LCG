@@ -207,11 +207,35 @@
   font-size: 0.9rem;
 }
 
-/* Charts Grid */
+/* Charts Grid - Flexible Desktop Layout */
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+/* Desktop: 2-3 charts per row */
+@media (min-width: 1200px) {
+  .charts-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+}
+
+/* Large Desktop: 4 charts per row for overview mode */
+@media (min-width: 1600px) {
+  .charts-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+  }
+}
+
+/* Medium Desktop: 2 charts per row */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .charts-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
 }
 
 .chart-card {
@@ -231,6 +255,26 @@
   grid-column: 1 / -1;
 }
 
+/* Specific wide chart handling for desktop */
+@media (min-width: 1200px) {
+  .chart-card.wide {
+    grid-column: span 3;
+  }
+}
+
+@media (min-width: 1600px) {
+  .chart-card.wide {
+    grid-column: span 4;
+  }
+}
+
+/* For medium screens, wide charts take full width */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .chart-card.wide {
+    grid-column: span 2;
+  }
+}
+
 .chart-card h3 {
   margin: 0 0 20px 0;
   font-size: 1.2rem;
@@ -242,11 +286,47 @@
 
 .chart-wrapper {
   position: relative;
-  height: 300px;
+  height: 280px;
+  min-height: 250px;
 }
 
 .chart-card.wide .chart-wrapper {
-  height: 250px;
+  height: 320px;
+  min-height: 280px;
+}
+
+/* Responsive chart heights */
+@media (min-width: 1200px) {
+  .chart-wrapper {
+    height: 320px;
+  }
+  
+  .chart-card.wide .chart-wrapper {
+    height: 350px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .chart-wrapper {
+    height: 300px;
+  }
+  
+  .chart-card.wide .chart-wrapper {
+    height: 380px;
+  }
+}
+
+/* Ensure charts look good on smaller screens */
+@media (max-width: 767px) {
+  .chart-wrapper {
+    height: 250px;
+    min-height: 220px;
+  }
+  
+  .chart-card.wide .chart-wrapper {
+    height: 280px;
+    min-height: 250px;
+  }
 }
 
 /* Progress Summary Special Styling */
@@ -313,19 +393,19 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
+/* Mobile Responsive Design */
+@media (max-width: 767px) {
   .analytics-container {
     padding: 16px;
   }
   
   .charts-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
     gap: 16px;
   }
   
   .chart-card.wide {
-    grid-column: 1;
+    grid-column: 1 !important;
   }
   
   .stats-grid {
@@ -348,16 +428,15 @@
     font-size: 1.5rem;
   }
   
-  .chart-wrapper {
-    height: 250px;
-  }
-  
-  .chart-card.wide .chart-wrapper {
-    height: 200px;
-  }
-  
   .insights-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Tablet specific adjustments */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .analytics-container {
+    padding: 18px;
   }
 }
 
@@ -444,6 +523,35 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Layout optimizations for different view modes */
+@media (min-width: 1200px) {
+  /* Overview mode: 4 charts in 2x2 grid on large screens */
+  .charts-grid:has([data-view="overview"]) {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 24px;
+  }
+  
+  /* Detailed mode: flexible layout for advanced charts */
+  .charts-grid:has([data-view="detailed"]) {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+}
+
+/* Extra wide screens get more charts per row */
+@media (min-width: 1800px) {
+  .charts-grid {
+    grid-template-columns: repeat(5, 1fr);
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+  
+  .chart-card.wide {
+    grid-column: span 5;
+  }
 }
 
 .metric-item {
