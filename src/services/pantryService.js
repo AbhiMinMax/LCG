@@ -282,76 +282,92 @@ export class PantryService {
     }
   }
 
-  // Compare local and cloud data intelligently
+  // Compare local and cloud data intelligently - optimized version
   compareData(localData, cloudData) {
+    console.log('🔍 Starting fast data comparison...');
+    
     const changes = {
       situations: { added: [], modified: [], deleted: [] },
       opportunities: { added: [], modified: [], deleted: [] },
       events: { added: [], modified: [], deleted: [] }
     };
 
-    // Helper function to compare arrays of objects by ID and updated_at
+    // Optimized helper function - single pass comparison
     const compareArrays = (localArray = [], cloudArray = [], type) => {
-      const localMap = new Map(localArray.map(item => [item.id, item]));
-      const cloudMap = new Map(cloudArray.map(item => [item.id, item]));
-
-      // Find added items (in local but not in cloud)
-      localArray.forEach(item => {
-        if (!cloudMap.has(item.id)) {
-          changes[type].added.push(item);
-        }
-      });
-
-      // Find modified items (different timestamps or content)
-      localArray.forEach(localItem => {
+      console.log(`📊 Comparing ${localArray.length} local vs ${cloudArray.length} cloud ${type}`);
+      
+      // Create maps for O(1) lookups
+      const cloudMap = new Map();
+      const localIds = new Set();
+      
+      // Build cloud map and track which cloud items we've seen
+      for (const item of cloudArray) {
+        cloudMap.set(item.id, item);
+      }
+      
+      // Single pass through local array
+      for (const localItem of localArray) {
+        localIds.add(localItem.id);
         const cloudItem = cloudMap.get(localItem.id);
-        if (cloudItem) {
-          const localTime = new Date(localItem.updated_at || localItem.created_at).getTime();
-          const cloudTime = new Date(cloudItem.updated_at || cloudItem.created_at).getTime();
-          
-          // Check if content is different (deep comparison for key fields)
-          const contentDifferent = this.isContentDifferent(localItem, cloudItem, type);
-          
-          if (localTime > cloudTime || contentDifferent) {
+        
+        if (!cloudItem) {
+          // Item exists in local but not cloud - added
+          changes[type].added.push(localItem);
+        } else {
+          // Both exist - check if modified (quick comparison first)
+          if (this.isItemModified(localItem, cloudItem, type)) {
             changes[type].modified.push(localItem);
           }
         }
-      });
-
-      // Find deleted items (in cloud but not in local)
-      cloudArray.forEach(item => {
-        if (!localMap.has(item.id)) {
-          changes[type].deleted.push(item.id);
+      }
+      
+      // Find deleted items (in cloud but not local) - single pass
+      for (const cloudItem of cloudArray) {
+        if (!localIds.has(cloudItem.id)) {
+          changes[type].deleted.push(cloudItem.id);
         }
-      });
+      }
     };
 
     // Compare each data type
-    compareArrays(localData.situations, cloudData.situations, 'situations');
-    compareArrays(localData.opportunities, cloudData.opportunities, 'opportunities');
-    compareArrays(localData.events, cloudData.events, 'events');
+    compareArrays(localData.situations || [], cloudData.situations || [], 'situations');
+    compareArrays(localData.opportunities || [], cloudData.opportunities || [], 'opportunities');
+    compareArrays(localData.events || [], cloudData.events || [], 'events');
 
     const hasChanges = Object.values(changes).some(change => 
       change.added.length > 0 || change.modified.length > 0 || change.deleted.length > 0
     );
 
+    console.log('✅ Comparison complete:', hasChanges ? 'Changes detected' : 'No changes');
     return { hasChanges, changes };
   }
 
-  // Check if content is different between items
-  isContentDifferent(localItem, cloudItem, type) {
+  // Fast item modification check - optimized for performance
+  isItemModified(localItem, cloudItem, type) {
+    // Quick timestamp check first (most common case)
+    const localTime = (localItem.updated_at || localItem.created_at);
+    const cloudTime = (cloudItem.updated_at || cloudItem.created_at);
+    
+    if (localTime && cloudTime) {
+      const localMs = new Date(localTime).getTime();
+      const cloudMs = new Date(cloudTime).getTime();
+      if (localMs > cloudMs) return true;
+      if (localMs < cloudMs) return false; // Cloud is newer, don't modify
+    }
+    
+    // Fast content comparison - avoid expensive JSON.stringify
     switch (type) {
       case 'situations':
         return localItem.title !== cloudItem.title || 
                localItem.description !== cloudItem.description ||
-               JSON.stringify(localItem.tags || []) !== JSON.stringify(cloudItem.tags || []);
+               this.arraysDifferent(localItem.tags, cloudItem.tags);
       
       case 'opportunities':
         return localItem.title !== cloudItem.title || 
                localItem.description !== cloudItem.description ||
                localItem.current_level !== cloudItem.current_level ||
                localItem.current_xp !== cloudItem.current_xp ||
-               JSON.stringify(localItem.tags || []) !== JSON.stringify(cloudItem.tags || []);
+               this.arraysDifferent(localItem.tags, cloudItem.tags);
       
       case 'events':
         return localItem.event_description !== cloudItem.event_description ||
@@ -362,6 +378,15 @@ export class PantryService {
       default:
         return false;
     }
+  }
+
+  // Fast array comparison without JSON.stringify
+  arraysDifferent(arr1 = [], arr2 = []) {
+    if (arr1.length !== arr2.length) return true;
+    for (let i = 0; i < arr1.length; i++) {
+      if (arr1[i] !== arr2[i]) return true;
+    }
+    return false;
   }
 
   // Merge local and cloud data based on comparison

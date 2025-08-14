@@ -40,7 +40,8 @@ const CloudSyncButton = () => {
     setSyncMessage('Fetching cloud data...');
 
     try {
-      // Get local data
+      // Get local data with progress updates
+      setSyncMessage('Loading local data...');
       const [opportunities, events, stats, situations] = await Promise.all([
         dbHelpers.getOpportunitiesSorted('level'),
         dbHelpers.getEventsWithDetails(),
@@ -56,7 +57,7 @@ const CloudSyncButton = () => {
         lastUpdated: Date.now()
       };
 
-      setSyncMessage('Comparing local and cloud data...');
+      setSyncMessage(`Syncing ${opportunities.length + events.length + situations.length} items...`);
       
       // Sync with cloud
       const result = await syncData(localData);
