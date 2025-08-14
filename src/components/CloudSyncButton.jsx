@@ -2,14 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { dbHelpers } from '../database/db';
 import LoginModal from './LoginModal';
+import SyncDetailsModal from './SyncDetailsModal';
 import './CloudSyncButton.css';
 
 const CloudSyncButton = () => {
   const { user, isAuthenticated, logout, syncData, getRateLimitStatus } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showSyncDetails, setShowSyncDetails] = useState(false);
   const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, success, error
   const [syncMessage, setSyncMessage] = useState('');
   const [rateLimitStatus, setRateLimitStatus] = useState(null);
+  const [lastSyncResult, setLastSyncResult] = useState(null);
 
   useEffect(() => {
     // Update rate limit status every second
@@ -34,7 +37,7 @@ const CloudSyncButton = () => {
     }
 
     setSyncStatus('syncing');
-    setSyncMessage('Syncing with cloud...');
+    setSyncMessage('Fetching cloud data...');
 
     try {
       // Get local data
@@ -53,15 +56,27 @@ const CloudSyncButton = () => {
         lastUpdated: Date.now()
       };
 
+      setSyncMessage('Comparing local and cloud data...');
+      
       // Sync with cloud
       const result = await syncData(localData);
 
-      if (result.action === 'downloaded') {
-        // Cloud data is newer, update local database
-        // This would require implementing data import functionality
-        setSyncMessage('Cloud data downloaded (import feature needed)');
+      if (result.action === 'merged' && result.mergedData) {
+        setSyncMessage('Updating local database...');
+        
+        // Update local database with merged data
+        await updateLocalDatabase(result.mergedData);
+        
+        // Store result for details modal
+        setLastSyncResult(result);
+        
+        // Create detailed sync message
+        const changesSummary = formatChangesSummary(result.changes);
+        setSyncMessage(`Sync complete! ${changesSummary}`);
         setSyncStatus('success');
       } else {
+        // Store result for details modal
+        setLastSyncResult(result);
         setSyncMessage(result.message);
         setSyncStatus('success');
       }
@@ -72,11 +87,110 @@ const CloudSyncButton = () => {
       setSyncStatus('error');
     }
 
-    // Clear status after 3 seconds
+    // Clear status after 5 seconds for longer messages
     setTimeout(() => {
       setSyncStatus('idle');
       setSyncMessage('');
-    }, 3000);
+    }, 5000);
+  };
+
+  const updateLocalDatabase = async (mergedData) => {
+    try {
+      // Get current local data for comparison
+      const [localSituations, localOpportunities, localEvents] = await Promise.all([
+        dbHelpers.db.situations.toArray(),
+        dbHelpers.db.opportunities.toArray(),
+        dbHelpers.db.events.toArray()
+      ]);
+
+      // Update situations
+      if (mergedData.situations) {
+        const mergedSituationIds = new Set(mergedData.situations.map(s => s.id));
+        
+        // Add/update situations
+        for (const situation of mergedData.situations) {
+          const existing = await dbHelpers.db.situations.get(situation.id);
+          if (existing) {
+            await dbHelpers.db.situations.update(situation.id, situation);
+          } else {
+            await dbHelpers.db.situations.add(situation);
+          }
+        }
+
+        // Remove situations that are not in merged data
+        for (const localSituation of localSituations) {
+          if (!mergedSituationIds.has(localSituation.id)) {
+            await dbHelpers.db.situations.delete(localSituation.id);
+            // Also remove related links
+            await dbHelpers.db.situation_opportunities.where('situation_id').equals(localSituation.id).delete();
+          }
+        }
+      }
+
+      // Update opportunities
+      if (mergedData.opportunities) {
+        const mergedOpportunityIds = new Set(mergedData.opportunities.map(o => o.id));
+        
+        // Add/update opportunities
+        for (const opportunity of mergedData.opportunities) {
+          const existing = await dbHelpers.db.opportunities.get(opportunity.id);
+          if (existing) {
+            await dbHelpers.db.opportunities.update(opportunity.id, opportunity);
+          } else {
+            await dbHelpers.db.opportunities.add(opportunity);
+          }
+        }
+
+        // Remove opportunities that are not in merged data
+        for (const localOpportunity of localOpportunities) {
+          if (!mergedOpportunityIds.has(localOpportunity.id)) {
+            await dbHelpers.db.opportunities.delete(localOpportunity.id);
+            // Also remove related links
+            await dbHelpers.db.situation_opportunities.where('opportunity_id').equals(localOpportunity.id).delete();
+          }
+        }
+      }
+
+      // Update events
+      if (mergedData.events) {
+        const mergedEventIds = new Set(mergedData.events.map(e => e.id));
+        
+        // Add/update events
+        for (const event of mergedData.events) {
+          const existing = await dbHelpers.db.events.get(event.id);
+          if (existing) {
+            await dbHelpers.db.events.update(event.id, event);
+          } else {
+            await dbHelpers.db.events.add(event);
+          }
+        }
+
+        // Remove events that are not in merged data
+        for (const localEvent of localEvents) {
+          if (!mergedEventIds.has(localEvent.id)) {
+            await dbHelpers.db.events.delete(localEvent.id);
+          }
+        }
+      }
+
+      console.log('Local database updated successfully with merged data');
+    } catch (error) {
+      console.error('Error updating local database:', error);
+      throw new Error('Failed to update local database');
+    }
+  };
+
+  const formatChangesSummary = (changes) => {
+    const parts = [];
+    
+    Object.entries(changes).forEach(([type, typeChanges]) => {
+      const { added, modified, deleted } = typeChanges;
+      if (added.length > 0) parts.push(`${added.length} ${type} added`);
+      if (modified.length > 0) parts.push(`${modified.length} ${type} updated`);
+      if (deleted.length > 0) parts.push(`${deleted.length} ${type} removed`);
+    });
+
+    return parts.length > 0 ? parts.join(', ') : 'No changes detected';
   };
 
   const handleLogout = () => {
@@ -147,6 +261,15 @@ const CloudSyncButton = () => {
             {syncMessage && (
               <div className={`sync-message ${syncStatus}`}>
                 {syncMessage}
+                {lastSyncResult && syncStatus === 'success' && (
+                  <button
+                    className="details-button"
+                    onClick={() => setShowSyncDetails(true)}
+                    title="View sync details"
+                  >
+                    📋 Details
+                  </button>
+                )}
               </div>
             )}
 
@@ -165,6 +288,12 @@ const CloudSyncButton = () => {
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
+      />
+
+      <SyncDetailsModal
+        isOpen={showSyncDetails}
+        onClose={() => setShowSyncDetails(false)}
+        syncResult={lastSyncResult}
       />
     </>
   );

@@ -233,7 +233,7 @@ export class PantryService {
     }
   }
 
-  // Sync local database with Pantry
+  // Intelligent sync with detailed comparison
   async syncWithPantry(localData) {
     try {
       // Get cloud data
@@ -244,39 +244,182 @@ export class PantryService {
         await this.saveUserData(localData);
         return { 
           action: 'uploaded', 
-          message: 'Local data uploaded to cloud' 
+          message: 'Local data uploaded to cloud (first time)',
+          changes: {
+            situations: { added: localData.situations?.length || 0 },
+            opportunities: { added: localData.opportunities?.length || 0 },
+            events: { added: localData.events?.length || 0 }
+          }
         };
       }
 
-      // Compare timestamps to determine which is newer
-      const localTimestamp = localData.lastUpdated || 0;
-      const cloudTimestamp = cloudData.lastUpdated || 0;
-
-      if (localTimestamp > cloudTimestamp) {
-        // Local data is newer, upload to cloud
-        await this.updateUserData(localData);
-        return { 
-          action: 'uploaded', 
-          message: 'Local data uploaded to cloud (newer)' 
-        };
-      } else if (cloudTimestamp > localTimestamp) {
-        // Cloud data is newer, return it for local update
-        return { 
-          action: 'downloaded', 
-          message: 'Cloud data is newer',
-          data: cloudData 
+      // Compare data intelligently
+      const comparison = this.compareData(localData, cloudData);
+      
+      if (comparison.hasChanges) {
+        // Merge data based on comparison
+        const mergedData = this.mergeData(localData, cloudData, comparison);
+        
+        // Update cloud with merged data
+        await this.updateUserData(mergedData);
+        
+        return {
+          action: 'merged',
+          message: 'Data synchronized with intelligent merge',
+          changes: comparison.changes,
+          mergedData
         };
       } else {
-        // Data is in sync
         return { 
           action: 'synced', 
-          message: 'Data is already in sync' 
+          message: 'Data is already in sync',
+          changes: { situations: {}, opportunities: {}, events: {} }
         };
       }
     } catch (error) {
       console.error('Error syncing with Pantry:', error);
       throw new Error(`Sync failed: ${error.message}`);
     }
+  }
+
+  // Compare local and cloud data intelligently
+  compareData(localData, cloudData) {
+    const changes = {
+      situations: { added: [], modified: [], deleted: [] },
+      opportunities: { added: [], modified: [], deleted: [] },
+      events: { added: [], modified: [], deleted: [] }
+    };
+
+    // Helper function to compare arrays of objects by ID and updated_at
+    const compareArrays = (localArray = [], cloudArray = [], type) => {
+      const localMap = new Map(localArray.map(item => [item.id, item]));
+      const cloudMap = new Map(cloudArray.map(item => [item.id, item]));
+
+      // Find added items (in local but not in cloud)
+      localArray.forEach(item => {
+        if (!cloudMap.has(item.id)) {
+          changes[type].added.push(item);
+        }
+      });
+
+      // Find modified items (different timestamps or content)
+      localArray.forEach(localItem => {
+        const cloudItem = cloudMap.get(localItem.id);
+        if (cloudItem) {
+          const localTime = new Date(localItem.updated_at || localItem.created_at).getTime();
+          const cloudTime = new Date(cloudItem.updated_at || cloudItem.created_at).getTime();
+          
+          // Check if content is different (deep comparison for key fields)
+          const contentDifferent = this.isContentDifferent(localItem, cloudItem, type);
+          
+          if (localTime > cloudTime || contentDifferent) {
+            changes[type].modified.push(localItem);
+          }
+        }
+      });
+
+      // Find deleted items (in cloud but not in local)
+      cloudArray.forEach(item => {
+        if (!localMap.has(item.id)) {
+          changes[type].deleted.push(item.id);
+        }
+      });
+    };
+
+    // Compare each data type
+    compareArrays(localData.situations, cloudData.situations, 'situations');
+    compareArrays(localData.opportunities, cloudData.opportunities, 'opportunities');
+    compareArrays(localData.events, cloudData.events, 'events');
+
+    const hasChanges = Object.values(changes).some(change => 
+      change.added.length > 0 || change.modified.length > 0 || change.deleted.length > 0
+    );
+
+    return { hasChanges, changes };
+  }
+
+  // Check if content is different between items
+  isContentDifferent(localItem, cloudItem, type) {
+    switch (type) {
+      case 'situations':
+        return localItem.title !== cloudItem.title || 
+               localItem.description !== cloudItem.description ||
+               JSON.stringify(localItem.tags || []) !== JSON.stringify(cloudItem.tags || []);
+      
+      case 'opportunities':
+        return localItem.title !== cloudItem.title || 
+               localItem.description !== cloudItem.description ||
+               localItem.current_level !== cloudItem.current_level ||
+               localItem.current_xp !== cloudItem.current_xp ||
+               JSON.stringify(localItem.tags || []) !== JSON.stringify(cloudItem.tags || []);
+      
+      case 'events':
+        return localItem.event_description !== cloudItem.event_description ||
+               localItem.choice_value !== cloudItem.choice_value ||
+               localItem.xp_change !== cloudItem.xp_change ||
+               localItem.situation_id !== cloudItem.situation_id;
+      
+      default:
+        return false;
+    }
+  }
+
+  // Merge local and cloud data based on comparison
+  mergeData(localData, cloudData, comparison) {
+    const merged = {
+      ...cloudData,
+      lastUpdated: Date.now()
+    };
+
+    // Merge situations
+    merged.situations = this.mergeArray(
+      cloudData.situations || [],
+      localData.situations || [],
+      comparison.changes.situations
+    );
+
+    // Merge opportunities
+    merged.opportunities = this.mergeArray(
+      cloudData.opportunities || [],
+      localData.opportunities || [],
+      comparison.changes.opportunities
+    );
+
+    // Merge events
+    merged.events = this.mergeArray(
+      cloudData.events || [],
+      localData.events || [],
+      comparison.changes.events
+    );
+
+    return merged;
+  }
+
+  // Merge array with changes
+  mergeArray(cloudArray, localArray, changes) {
+    let result = [...cloudArray];
+
+    // Add new items
+    changes.added.forEach(item => {
+      result.push(item);
+    });
+
+    // Update modified items
+    changes.modified.forEach(modifiedItem => {
+      const index = result.findIndex(item => item.id === modifiedItem.id);
+      if (index !== -1) {
+        result[index] = modifiedItem;
+      } else {
+        result.push(modifiedItem); // Add if not found
+      }
+    });
+
+    // Remove deleted items
+    changes.deleted.forEach(deletedId => {
+      result = result.filter(item => item.id !== deletedId);
+    });
+
+    return result;
   }
 
   // Get rate limit status
