@@ -46,7 +46,7 @@ function Analytics() {
   const [situationFilter, setSituationFilter] = useState('all');
   const [opportunityFilter, setOpportunityFilter] = useState('all');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
-  const [chartView, setChartView] = useState('overview'); // overview, detailed, comparison
+  const [chartView, setChartView] = useState('detailed'); // overview, detailed, comparison
   const [selectedMetric, setSelectedMetric] = useState('all');
 
   useEffect(() => {
@@ -804,6 +804,20 @@ function Analytics() {
         </div>
 
         {/* Charts Grid */}
+        {/* Active View Indicator */}
+        <div style={{ 
+          padding: '12px 20px', 
+          backgroundColor: 'var(--card-bg)', 
+          borderRadius: '8px', 
+          marginBottom: '20px',
+          border: '2px solid var(--accent-color)',
+          textAlign: 'center',
+          fontWeight: 'bold',
+          color: 'var(--accent-color)'
+        }}>
+          📊 Current View: {chartView.charAt(0).toUpperCase() + chartView.slice(1)} Mode
+        </div>
+
         <div className="charts-grid">
           {/* Conditional Chart Rendering Based on View */}
           {chartView === 'overview' && (
