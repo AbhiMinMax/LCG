@@ -802,6 +802,218 @@ function Analytics() {
             </div>
           </div>
         </div>
+
+        {/* Charts Grid */}
+        <div className="charts-grid">
+          {/* Conditional Chart Rendering Based on View */}
+          {chartView === 'overview' && (
+            <>
+              {/* XP Progress Bar Chart */}
+              <div className="chart-card">
+                <h3>🚀 XP Progress by Opportunity</h3>
+                <div className="chart-wrapper">
+                  <Bar data={getXPProgressChart()} options={chartOptions} />
+                </div>
+              </div>
+
+              {/* Level Distribution */}
+              <div className="chart-card">
+                <h3>📊 Level Distribution</h3>
+                <div className="chart-wrapper">
+                  <Bar data={getOpportunityLevelsChart()} options={chartOptions} />
+                </div>
+              </div>
+
+              {/* Choice Quality Distribution */}
+              <div className="chart-card">
+                <h3>🎯 Choice Quality Distribution</h3>
+                <div className="chart-wrapper">
+                  <Doughnut data={getChoiceQualityChart()} options={pieOptions} />
+                </div>
+              </div>
+
+              {/* Activity by Day */}
+              <div className="chart-card">
+                <h3>📅 Activity by Day of Week</h3>
+                <div className="chart-wrapper">
+                  <Bar data={getActivityByDayChart()} options={chartOptions} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {chartView === 'detailed' && (
+            <>
+              {/* Radar Chart for Opportunities */}
+              <div className="chart-card">
+                <h3>🎯 Opportunity Levels Radar</h3>
+                <div className="chart-wrapper">
+                  <Radar data={getOpportunityRadarChart()} options={radarOptions} />
+                </div>
+              </div>
+
+              {/* Monthly Progress Chart */}
+              <div className="chart-card wide">
+                <h3>📈 Monthly Progress Trend</h3>
+                <div className="chart-wrapper">
+                  <Bar data={getMonthlyProgressChart()} options={dualAxisOptions} />
+                </div>
+              </div>
+
+              {/* XP Trend Chart */}
+              <div className="chart-card wide">
+                <h3>📈 XP Trend Analysis</h3>
+                <div className="chart-wrapper">
+                  <Bar data={getXPTrendChart()} options={chartOptions} />
+                </div>
+              </div>
+
+              {/* Situation Breakdown */}
+              <div className="chart-card">
+                <h3>🌐 Situation Breakdown</h3>
+                <div className="chart-wrapper">
+                  <PolarArea data={getSituationBreakdownChart()} options={pieOptions} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {chartView === 'comparison' && (
+            <>
+              {/* Events Timeline */}
+              <div className="chart-card wide">
+                <h3>📅 Events Timeline</h3>
+                <div className="chart-wrapper">
+                  <Line data={getEventsTimelineChart()} options={chartOptions} />
+                </div>
+              </div>
+
+              {/* Top Opportunities */}
+              <div className="chart-card">
+                <h3>🏆 Top Performing Opportunities</h3>
+                <div className="chart-wrapper">
+                  <Pie data={getTopOpportunitiesChart()} options={pieOptions} />
+                </div>
+              </div>
+
+              {/* Performance Metrics Comparison */}
+              <div className="chart-card wide">
+                <h3>📊 Performance Metrics</h3>
+                <div className="metrics-comparison">
+                  <div className="metric-item">
+                    <span className="metric-label">Excellence Rate:</span>
+                    <div className="metric-bar">
+                      <div 
+                        className="metric-fill" 
+                        style={{ 
+                          width: `${analyticsUtils.getPerformanceMetrics(filteredData.events).excellenceRate}%`,
+                          backgroundColor: colors.success 
+                        }}
+                      ></div>
+                      <span className="metric-value">
+                        {analyticsUtils.getPerformanceMetrics(filteredData.events).excellenceRate}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="metric-item">
+                    <span className="metric-label">Improvement Rate:</span>
+                    <div className="metric-bar">
+                      <div 
+                        className="metric-fill" 
+                        style={{ 
+                          width: `${analyticsUtils.getPerformanceMetrics(filteredData.events).improvementRate}%`,
+                          backgroundColor: colors.primary 
+                        }}
+                      ></div>
+                      <span className="metric-value">
+                        {analyticsUtils.getPerformanceMetrics(filteredData.events).improvementRate}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="metric-item">
+                    <span className="metric-label">Consistency Score:</span>
+                    <div className="metric-bar">
+                      <div 
+                        className="metric-fill" 
+                        style={{ 
+                          width: `${analyticsUtils.getPerformanceMetrics(filteredData.events).consistencyScore}%`,
+                          backgroundColor: colors.info 
+                        }}
+                      ></div>
+                      <span className="metric-value">
+                        {analyticsUtils.getPerformanceMetrics(filteredData.events).consistencyScore}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Comparison Charts */}
+              <div className="chart-card">
+                <h3>📊 Level Distribution</h3>
+                <div className="chart-wrapper">
+                  <Bar data={getOpportunityLevelsChart()} options={chartOptions} />
+                </div>
+              </div>
+
+              <div className="chart-card">
+                <h3>🎯 Choice Quality Distribution</h3>
+                <div className="chart-wrapper">
+                  <Doughnut data={getChoiceQualityChart()} options={pieOptions} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Progress Summary - Always visible */}
+          <div className="chart-card progress-summary">
+            <h3>📈 Progress Summary</h3>
+            <div className="summary-content">
+              <div className="summary-item">
+                <span className="summary-label">Total XP Earned:</span>
+                <span className="summary-value">
+                  {filteredData.opportunities.reduce((sum, opp) => sum + opp.current_xp, 0)}
+                </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Levels Gained:</span>
+                <span className="summary-value">
+                  {filteredData.opportunities.reduce((sum, opp) => sum + (opp.current_level - 1), 0)}
+                </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Most Active Area:</span>
+                <span className="summary-value">
+                  {filteredData.opportunities.length > 0 
+                    ? [...filteredData.opportunities].sort((a, b) => b.current_xp - a.current_xp)[0]?.title || 'N/A'
+                    : 'N/A'
+                  }
+                </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Excellence Rate:</span>
+                <span className="summary-value">
+                  {filteredData.events.length > 0 
+                    ? Math.round((filteredData.events.filter(e => e.choice_value >= 3).length / filteredData.events.length) * 100) + '%'
+                    : '0%'
+                  }
+                </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Current Streak:</span>
+                <span className="summary-value">
+                  {analyticsUtils.calculateStreak(filteredData.events).current} days
+                </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Longest Streak:</span>
+                <span className="summary-value">
+                  {analyticsUtils.calculateStreak(filteredData.events).longest} days
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
