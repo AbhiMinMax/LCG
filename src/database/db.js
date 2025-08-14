@@ -11,6 +11,27 @@ export class LifeProgressDB extends Dexie {
       situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
       events: '++id, situation_id, event_description, choice_value, xp_change, timestamp, affected_opportunities'
     });
+
+    // Version 2: Add title field to events
+    this.version(2).stores({
+      situations: '++id, title, description, tags, created_at, updated_at',
+      opportunities: '++id, title, description, tags, current_xp, current_level, created_at, updated_at',
+      situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
+      events: '++id, title, situation_id, event_description, choice_value, xp_change, timestamp, affected_opportunities'
+    }).upgrade(tx => {
+      // Add title field to existing events based on choice value
+      return tx.events.toCollection().modify(event => {
+        if (!event.title) {
+          const choiceLabels = {
+            1: 'Misguided Response',
+            2: 'Avoided Challenge', 
+            3: 'Attempted Response',
+            4: 'Excellent Response'
+          };
+          event.title = choiceLabels[event.choice_value] || 'Life Event';
+        }
+      });
+    });
   }
 }
 
@@ -234,13 +255,23 @@ export const dbHelpers = {
   },
 
   // Add new event and update all linked opportunities
-  async addEvent(situationId, eventDescription, choiceValue) {
+  async addEvent(situationId, eventDescription, choiceValue, eventTitle = null) {
     const xpChange = this.calculateXpChange(choiceValue);
     const opportunities = await this.getOpportunitiesForSituation(situationId);
     const affectedOpportunityIds = opportunities.map(opp => opp.id);
 
+    // Generate title if not provided
+    const choiceLabels = {
+      1: 'Misguided Response',
+      2: 'Avoided Challenge', 
+      3: 'Attempted Response',
+      4: 'Excellent Response'
+    };
+    const title = eventTitle || choiceLabels[choiceValue] || 'Life Event';
+
     // Create event record
     const eventId = await db.events.add({
+      title,
       situation_id: situationId,
       event_description: eventDescription,
       choice_value: choiceValue,

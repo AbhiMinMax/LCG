@@ -50,8 +50,12 @@ function CheckHistory() {
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
-    const diffTime = now - date;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Compare dates only (not times) for accurate day calculation
+    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffTime = todayOnly - dateOnly;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
     if (diffDays === 0) {
       return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -176,6 +180,7 @@ function CheckHistory() {
               </div>
 
               <div className="event-preview">
+                <h4 className="event-title">{event.title || CHOICE_LABELS[event.choice_value]}</h4>
                 <p>{truncateDescription(event.event_description)}</p>
                 <div 
                   className="choice-indicator"

@@ -13,6 +13,7 @@ function AddEvent() {
   const [filteredSituations, setFilteredSituations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSituation, setSelectedSituation] = useState('');
+  const [eventTitle, setEventTitle] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [selectedChoice, setSelectedChoice] = useState('');
   const [affectedOpportunities, setAffectedOpportunities] = useState([]);
@@ -86,7 +87,8 @@ function AddEvent() {
       const result = await dbHelpers.addEvent(
         parseInt(selectedSituation),
         eventDescription.trim(),
-        parseInt(selectedChoice)
+        parseInt(selectedChoice),
+        eventTitle.trim() || null
       );
 
       setLastResult(result);
@@ -94,6 +96,7 @@ function AddEvent() {
       
       // Reset form
       setSelectedSituation('');
+      setEventTitle('');
       setEventDescription('');
       setSelectedChoice('');
       setAffectedOpportunities([]);
@@ -111,6 +114,7 @@ function AddEvent() {
 
   const handleCancel = () => {
     setSelectedSituation('');
+    setEventTitle('');
     setEventDescription('');
     setSelectedChoice('');
     setAffectedOpportunities([]);
@@ -212,6 +216,23 @@ function AddEvent() {
               </div>
             </div>
           )}
+
+          <div className="form-group">
+            <label htmlFor="title" className="form-label">
+              Event Title
+            </label>
+            <input
+              id="title"
+              type="text"
+              className="form-input"
+              value={eventTitle}
+              onChange={(e) => setEventTitle(e.target.value)}
+              placeholder="Optional: Give this event a custom title..."
+            />
+            <div style={{fontSize: '0.85em', color: '#666', marginTop: '4px'}}>
+              Leave blank to auto-generate based on your response choice
+            </div>
+          </div>
 
           <div className="form-group">
             <label htmlFor="description" className="form-label">

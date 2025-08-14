@@ -370,7 +370,8 @@ export class PantryService {
                this.arraysDifferent(localItem.tags, cloudItem.tags);
       
       case 'events':
-        return localItem.event_description !== cloudItem.event_description ||
+        return localItem.title !== cloudItem.title ||
+               localItem.event_description !== cloudItem.event_description ||
                localItem.choice_value !== cloudItem.choice_value ||
                localItem.xp_change !== cloudItem.xp_change ||
                localItem.situation_id !== cloudItem.situation_id;

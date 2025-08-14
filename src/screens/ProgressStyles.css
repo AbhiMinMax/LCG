@@ -293,6 +293,13 @@
   margin-bottom: 15px;
 }
 
+.event-title {
+  margin: 0 0 8px 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .event-preview p {
   margin: 0 0 10px 0;
   color: #666;
