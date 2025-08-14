@@ -1,0 +1,263 @@
+.sync-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  padding: 20px;
+}
+
+.sync-modal {
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--card-hover-shadow);
+  border: 1px solid var(--border-color);
+  max-width: 600px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+.sync-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sync-modal-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--text-color);
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.close-button:hover {
+  background: var(--border-color);
+  color: var(--text-color);
+}
+
+.sync-modal-content {
+  padding: 24px;
+}
+
+.sync-summary {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--bg-color);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.sync-status {
+  margin-bottom: 12px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.status-badge.merged {
+  background: #ddd6fe;
+  color: #7c3aed;
+}
+
+.status-badge.uploaded {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.status-badge.synced {
+  background: #d1fae5;
+  color: #059669;
+}
+
+[data-theme="dark"] .status-badge.merged {
+  background: rgba(124, 58, 237, 0.2);
+  color: #a78bfa;
+}
+
+[data-theme="dark"] .status-badge.uploaded {
+  background: rgba(37, 99, 235, 0.2);
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .status-badge.synced {
+  background: rgba(5, 150, 105, 0.2);
+  color: #34d399;
+}
+
+.sync-message {
+  color: var(--text-color);
+  margin: 8px 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.changes-summary {
+  color: var(--text-muted);
+  margin: 8px 0 0 0;
+  font-size: 0.9rem;
+}
+
+.changes-details {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.changes-section {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.changes-section h4 {
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--border-color);
+  color: var(--text-color);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.change-group {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.change-group:last-child {
+  border-bottom: none;
+}
+
+.change-group h5 {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.change-group.added h5 {
+  color: #059669;
+}
+
+.change-group.modified h5 {
+  color: #d97706;
+}
+
+.change-group.deleted h5 {
+  color: #dc2626;
+}
+
+[data-theme="dark"] .change-group.added h5 {
+  color: #34d399;
+}
+
+[data-theme="dark"] .change-group.modified h5 {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .change-group.deleted h5 {
+  color: #f87171;
+}
+
+.change-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.change-group li {
+  padding: 4px 0;
+  color: var(--text-color);
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.change-desc {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.no-changes {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.no-changes p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.sync-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: var(--accent-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+/* Responsive design */
+@media (max-width: 480px) {
+  .sync-modal {
+    margin: 10px;
+    max-height: 90vh;
+  }
+  
+  .sync-modal-content {
+    padding: 16px;
+  }
+  
+  .sync-summary {
+    padding: 12px;
+  }
+  
+  .changes-section h4 {
+    font-size: 0.9rem;
+    padding: 10px 12px;
+  }
+  
+  .change-group {
+    padding: 10px 12px;
+  }
+}
