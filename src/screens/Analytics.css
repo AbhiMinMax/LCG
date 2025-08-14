@@ -3,6 +3,9 @@
   max-width: 1400px;
   margin: 0 auto;
   animation: fadeIn 0.3s ease-out;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .analytics-header {
@@ -210,14 +213,16 @@
 /* Charts Grid - Flexible Desktop Layout */
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 20px;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 /* Desktop: 2-3 charts per row */
 @media (min-width: 1200px) {
   .charts-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: 24px;
   }
 }
@@ -225,7 +230,7 @@
 /* Large Desktop: 4 charts per row for overview mode */
 @media (min-width: 1600px) {
   .charts-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
     gap: 24px;
   }
 }
@@ -244,6 +249,8 @@
   padding: 24px;
   box-shadow: var(--card-shadow);
   border: 1px solid var(--border-color);
+  overflow: hidden;
+  min-width: 0;
   transition: all 0.3s ease;
 }
 
@@ -288,6 +295,8 @@
   position: relative;
   height: 280px;
   min-height: 250px;
+  width: 100%;
+  overflow: hidden;
 }
 
 .chart-card.wide .chart-wrapper {
