@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -7,11 +7,13 @@ import {
   LineElement,
   PointElement,
   ArcElement,
+  RadialLinearScale,
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from 'chart.js';
-import { Bar, Line, Pie, Doughnut } from 'react-chartjs-2';
+import { Bar, Line, Pie, Doughnut, Radar, PolarArea } from 'react-chartjs-2';
 import { dbHelpers } from '../database/db';
 import { useTheme } from '../hooks/useTheme';
 import { analyticsUtils } from '../utils/analyticsUtils';
@@ -24,9 +26,11 @@ ChartJS.register(
   LineElement,
   PointElement,
   ArcElement,
+  RadialLinearScale,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 function Analytics() {
@@ -34,37 +38,75 @@ function Analytics() {
   const [analyticsData, setAnalyticsData] = useState({
     opportunities: [],
     events: [],
-    stats: null
+    stats: null,
+    situations: []
   });
   const [loading, setLoading] = useState(true);
-  const [timeFilter, setTimeFilter] = useState('all'); // all, 30days, 7days
+  const [timeFilter, setTimeFilter] = useState('all'); // all, 30days, 7days, custom
+  const [situationFilter, setSituationFilter] = useState('all');
+  const [opportunityFilter, setOpportunityFilter] = useState('all');
+  const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
+  const [chartView, setChartView] = useState('overview'); // overview, detailed, comparison
+  const [selectedMetric, setSelectedMetric] = useState('all');
 
   useEffect(() => {
     loadAnalyticsData();
-  }, [timeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filtered data based on current filters
+  const filteredData = useMemo(() => {
+    let filteredEvents = [...analyticsData.events];
+    let filteredOpportunities = [...analyticsData.opportunities];
+
+    // Time filtering
+    if (timeFilter !== 'all') {
+      if (timeFilter === 'custom' && customDateRange.start && customDateRange.end) {
+        const startDate = new Date(customDateRange.start);
+        const endDate = new Date(customDateRange.end);
+        filteredEvents = filteredEvents.filter(event => {
+          const eventDate = new Date(event.timestamp);
+          return eventDate >= startDate && eventDate <= endDate;
+        });
+      } else if (timeFilter !== 'custom') {
+        const daysAgo = timeFilter === '30days' ? 30 : timeFilter === '7days' ? 7 : timeFilter === '3months' ? 90 : 365;
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
+        filteredEvents = filteredEvents.filter(event => new Date(event.timestamp) >= cutoffDate);
+      }
+    }
+
+    // Situation filtering
+    if (situationFilter !== 'all') {
+      filteredEvents = filteredEvents.filter(event => event.situation_id === parseInt(situationFilter));
+    }
+
+    // Opportunity filtering (filter opportunities that are linked to selected situation)
+    if (opportunityFilter !== 'all') {
+      filteredOpportunities = filteredOpportunities.filter(opp => opp.id === parseInt(opportunityFilter));
+    }
+
+    return {
+      events: filteredEvents,
+      opportunities: filteredOpportunities,
+      situations: analyticsData.situations
+    };
+  }, [analyticsData, timeFilter, situationFilter, opportunityFilter, customDateRange]);
 
   const loadAnalyticsData = async () => {
     try {
       setLoading(true);
-      const [opportunities, events, stats] = await Promise.all([
+      const [opportunities, events, stats, situations] = await Promise.all([
         dbHelpers.getOpportunitiesSorted('level'),
         dbHelpers.getEventsWithDetails(),
-        dbHelpers.getDataStats()
+        dbHelpers.getDataStats(),
+        dbHelpers.getSituationsWithOpportunities()
       ]);
-
-      // Filter events by time if needed
-      let filteredEvents = events;
-      if (timeFilter !== 'all') {
-        const daysAgo = timeFilter === '30days' ? 30 : 7;
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
-        filteredEvents = events.filter(event => new Date(event.timestamp) >= cutoffDate);
-      }
 
       setAnalyticsData({
         opportunities,
-        events: filteredEvents,
-        stats
+        events,
+        stats,
+        situations
       });
     } catch (error) {
       console.error('Error loading analytics data:', error);
@@ -104,7 +146,7 @@ function Analytics() {
   // Opportunities Level Distribution Chart
   const getOpportunityLevelsChart = () => {
     const levelCounts = {};
-    analyticsData.opportunities.forEach(opp => {
+    filteredData.opportunities.forEach(opp => {
       levelCounts[opp.current_level] = (levelCounts[opp.current_level] || 0) + 1;
     });
 
@@ -124,10 +166,10 @@ function Analytics() {
   // XP Progress Chart
   const getXPProgressChart = () => {
     return {
-      labels: analyticsData.opportunities.map(opp => opp.title),
+      labels: filteredData.opportunities.map(opp => opp.title),
       datasets: [{
         label: 'Current XP',
-        data: analyticsData.opportunities.map(opp => opp.current_xp),
+        data: filteredData.opportunities.map(opp => opp.current_xp),
         backgroundColor: colors.success,
         borderColor: colors.success,
         borderWidth: 2,
@@ -139,7 +181,7 @@ function Analytics() {
   // Events Timeline Chart
   const getEventsTimelineChart = () => {
     const eventsByDate = {};
-    analyticsData.events.forEach(event => {
+    filteredData.events.forEach(event => {
       const date = new Date(event.timestamp).toLocaleDateString();
       eventsByDate[date] = (eventsByDate[date] || 0) + 1;
     });
@@ -172,7 +214,7 @@ function Analytics() {
     };
 
     const qualityCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    analyticsData.events.forEach(event => {
+    filteredData.events.forEach(event => {
       if (event.choice_value >= 1 && event.choice_value <= 4) {
         qualityCounts[event.choice_value]++;
       }
@@ -191,7 +233,7 @@ function Analytics() {
 
   // Top Performing Opportunities
   const getTopOpportunitiesChart = () => {
-    const topOpps = [...analyticsData.opportunities]
+    const topOpps = [...filteredData.opportunities]
       .sort((a, b) => (b.current_level * 100 + b.current_xp) - (a.current_level * 100 + a.current_xp))
       .slice(0, 6);
 
@@ -218,7 +260,7 @@ function Analytics() {
     const dayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const dayActivity = new Array(7).fill(0);
     
-    analyticsData.events.forEach(event => {
+    filteredData.events.forEach(event => {
       const dayOfWeek = new Date(event.timestamp).getDay();
       dayActivity[dayOfWeek]++;
     });
@@ -233,6 +275,172 @@ function Analytics() {
         borderWidth: 2,
         borderRadius: 6,
       }]
+    };
+  };
+
+  // New chart types
+  const getOpportunityRadarChart = () => {
+    const topOpps = filteredData.opportunities.slice(0, 6);
+    return {
+      labels: topOpps.map(opp => opp.title),
+      datasets: [{
+        label: 'Current Level',
+        data: topOpps.map(opp => opp.current_level),
+        backgroundColor: colors.primary + '40',
+        borderColor: colors.primary,
+        borderWidth: 2,
+        pointBackgroundColor: colors.primary,
+      }]
+    };
+  };
+
+  const getMonthlyProgressChart = () => {
+    const monthlyData = {};
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    filteredData.events.forEach(event => {
+      const month = new Date(event.timestamp).getMonth();
+      const year = new Date(event.timestamp).getFullYear();
+      const key = `${monthNames[month]} ${year}`;
+      if (!monthlyData[key]) {
+        monthlyData[key] = { events: 0, totalXp: 0 };
+      }
+      monthlyData[key].events++;
+      monthlyData[key].totalXp += event.xp_change || 0;
+    });
+
+    const sortedMonths = Object.keys(monthlyData).sort((a, b) => {
+      const [monthA, yearA] = a.split(' ');
+      const [monthB, yearB] = b.split(' ');
+      const dateA = new Date(`${monthA} 1, ${yearA}`);
+      const dateB = new Date(`${monthB} 1, ${yearB}`);
+      return dateA - dateB;
+    });
+
+    return {
+      labels: sortedMonths,
+      datasets: [
+        {
+          label: 'Events',
+          data: sortedMonths.map(month => monthlyData[month].events),
+          backgroundColor: colors.primary,
+          borderColor: colors.primary,
+          borderWidth: 2,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Total XP',
+          data: sortedMonths.map(month => monthlyData[month].totalXp),
+          backgroundColor: colors.success,
+          borderColor: colors.success,
+          borderWidth: 2,
+          type: 'line',
+          yAxisID: 'y1',
+        }
+      ]
+    };
+  };
+
+  const getHourlyHeatmapChart = () => {
+    const hours = Array.from({length: 24}, (_, i) => i);
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const heatmapData = [];
+    
+    days.forEach((day, dayIndex) => {
+      hours.forEach(hour => {
+        const count = filteredData.events.filter(event => {
+          const eventDate = new Date(event.timestamp);
+          return eventDate.getDay() === dayIndex && eventDate.getHours() === hour;
+        }).length;
+        
+        heatmapData.push({
+          x: hour,
+          y: day,
+          v: count
+        });
+      });
+    });
+
+    return {
+      datasets: [{
+        label: 'Activity',
+        data: heatmapData,
+        backgroundColor: (ctx) => {
+          const value = ctx.parsed.v;
+          const alpha = Math.min(value / 5, 1); // Normalize to max activity
+          return `${colors.primary}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`;
+        },
+        borderColor: colors.text,
+        borderWidth: 1,
+        width: ({chart}) => (chart.chartArea || {}).width / 24,
+        height: ({chart}) => (chart.chartArea || {}).height / 7,
+      }]
+    };
+  };
+
+  const getSituationBreakdownChart = () => {
+    const situationCounts = {};
+    filteredData.events.forEach(event => {
+      const situationTitle = event.situation?.title || 'Unknown';
+      situationCounts[situationTitle] = (situationCounts[situationTitle] || 0) + 1;
+    });
+
+    return {
+      labels: Object.keys(situationCounts),
+      datasets: [{
+        data: Object.values(situationCounts),
+        backgroundColor: [
+          colors.primary,
+          colors.secondary,
+          colors.success,
+          colors.warning,
+          colors.danger,
+          colors.info,
+        ],
+        borderWidth: 2,
+        borderColor: colors.text,
+      }]
+    };
+  };
+
+  const getXPTrendChart = () => {
+    const dailyXP = {};
+    filteredData.events.forEach(event => {
+      const date = new Date(event.timestamp).toLocaleDateString();
+      dailyXP[date] = (dailyXP[date] || 0) + (event.xp_change || 0);
+    });
+
+    const sortedDates = Object.keys(dailyXP).sort((a, b) => new Date(a) - new Date(b));
+    
+    // Calculate cumulative XP
+    let cumulativeXP = 0;
+    const cumulativeData = sortedDates.map(date => {
+      cumulativeXP += dailyXP[date];
+      return cumulativeXP;
+    });
+
+    return {
+      labels: sortedDates,
+      datasets: [
+        {
+          label: 'Daily XP',
+          data: sortedDates.map(date => dailyXP[date]),
+          backgroundColor: colors.info + '60',
+          borderColor: colors.info,
+          borderWidth: 2,
+          type: 'bar',
+        },
+        {
+          label: 'Cumulative XP',
+          data: cumulativeData,
+          backgroundColor: 'transparent',
+          borderColor: colors.success,
+          borderWidth: 3,
+          type: 'line',
+          fill: false,
+          tension: 0.4,
+        }
+      ]
     };
   };
 
@@ -278,6 +486,74 @@ function Analytics() {
     },
   };
 
+  const radarOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        labels: {
+          color: colors.text,
+        },
+      },
+    },
+    scales: {
+      r: {
+        beginAtZero: true,
+        ticks: {
+          color: colors.text,
+        },
+        grid: {
+          color: colors.grid,
+        },
+        pointLabels: {
+          color: colors.text,
+        },
+      },
+    },
+  };
+
+  const dualAxisOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        labels: {
+          color: colors.text,
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: colors.text,
+        },
+        grid: {
+          color: colors.grid,
+        },
+      },
+      y: {
+        type: 'linear',
+        display: true,
+        position: 'left',
+        ticks: {
+          color: colors.text,
+        },
+        grid: {
+          color: colors.grid,
+        },
+      },
+      y1: {
+        type: 'linear',
+        display: true,
+        position: 'right',
+        ticks: {
+          color: colors.text,
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
+      },
+    },
+  };
+
   if (loading) {
     return (
       <div className="analytics-loading">
@@ -291,16 +567,87 @@ function Analytics() {
     <div className="analytics-container">
       <div className="analytics-header">
         <h2>📈 Analytics Dashboard</h2>
-        <div className="time-filter">
-          <select 
-            value={timeFilter} 
-            onChange={(e) => setTimeFilter(e.target.value)}
-            className="filter-select"
-          >
-            <option value="all">All Time</option>
-            <option value="30days">Last 30 Days</option>
-            <option value="7days">Last 7 Days</option>
-          </select>
+        
+        {/* Enhanced Filter Controls */}
+        <div className="analytics-filters">
+          <div className="filter-group">
+            <label>Time Range:</label>
+            <select 
+              value={timeFilter} 
+              onChange={(e) => setTimeFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Time</option>
+              <option value="7days">Last 7 Days</option>
+              <option value="30days">Last 30 Days</option>
+              <option value="3months">Last 3 Months</option>
+              <option value="1year">Last Year</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+
+          {timeFilter === 'custom' && (
+            <div className="filter-group custom-date-range">
+              <input
+                type="date"
+                value={customDateRange.start}
+                onChange={(e) => setCustomDateRange({...customDateRange, start: e.target.value})}
+                className="filter-input"
+              />
+              <span>to</span>
+              <input
+                type="date"
+                value={customDateRange.end}
+                onChange={(e) => setCustomDateRange({...customDateRange, end: e.target.value})}
+                className="filter-input"
+              />
+            </div>
+          )}
+
+          <div className="filter-group">
+            <label>Situation:</label>
+            <select 
+              value={situationFilter} 
+              onChange={(e) => setSituationFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Situations</option>
+              {analyticsData.situations.map(situation => (
+                <option key={situation.id} value={situation.id}>
+                  {situation.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>Opportunity:</label>
+            <select 
+              value={opportunityFilter} 
+              onChange={(e) => setOpportunityFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Opportunities</option>
+              {analyticsData.opportunities.map(opportunity => (
+                <option key={opportunity.id} value={opportunity.id}>
+                  {opportunity.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>View:</label>
+            <select 
+              value={chartView} 
+              onChange={(e) => setChartView(e.target.value)}
+              className="filter-select"
+            >
+              <option value="overview">Overview</option>
+              <option value="detailed">Detailed</option>
+              <option value="comparison">Comparison</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -316,16 +663,16 @@ function Analytics() {
         <div className="stat-card">
           <div className="stat-icon">📝</div>
           <div className="stat-content">
-            <h3>{analyticsData.events.length}</h3>
-            <p>Events Logged</p>
+            <h3>{filteredData.events.length}</h3>
+            <p>Events {timeFilter !== 'all' ? `(${timeFilter})` : 'Logged'}</p>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon">⭐</div>
           <div className="stat-content">
             <h3>
-              {analyticsData.opportunities.length > 0 
-                ? Math.round(analyticsData.opportunities.reduce((sum, opp) => sum + opp.current_level, 0) / analyticsData.opportunities.length * 10) / 10
+              {filteredData.opportunities.length > 0 
+                ? Math.round(filteredData.opportunities.reduce((sum, opp) => sum + opp.current_level, 0) / filteredData.opportunities.length * 10) / 10
                 : 0
               }
             </h3>
@@ -336,7 +683,7 @@ function Analytics() {
           <div className="stat-icon">🔥</div>
           <div className="stat-content">
             <h3>
-              {analyticsUtils.calculateStreak(analyticsData.events).current}
+              {analyticsUtils.calculateStreak(filteredData.events).current}
             </h3>
             <p>Day Streak</p>
           </div>
@@ -347,7 +694,7 @@ function Analytics() {
       <div className="insights-section">
         <h3>💡 Insights & Recommendations</h3>
         <div className="insights-grid">
-          {analyticsUtils.generateInsights(analyticsData.opportunities, analyticsData.events).map((insight, index) => (
+          {analyticsUtils.generateInsights(filteredData.opportunities, filteredData.events).map((insight, index) => (
             <div key={index} className={`insight-card ${insight.priority}`}>
               <div className="insight-content">
                 <p>{insight.message}</p>
@@ -414,13 +761,13 @@ function Analytics() {
             <div className="summary-item">
               <span className="summary-label">Total XP Earned:</span>
               <span className="summary-value">
-                {analyticsData.opportunities.reduce((sum, opp) => sum + opp.current_xp, 0)}
+                {filteredData.opportunities.reduce((sum, opp) => sum + opp.current_xp, 0)}
               </span>
             </div>
             <div className="summary-item">
               <span className="summary-label">Levels Gained:</span>
               <span className="summary-value">
-                {analyticsData.opportunities.reduce((sum, opp) => sum + (opp.current_level - 1), 0)}
+                {filteredData.opportunities.reduce((sum, opp) => sum + (opp.current_level - 1), 0)}
               </span>
             </div>
             <div className="summary-item">
