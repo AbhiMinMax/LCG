@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db, dbHelpers, ensureDefaultData } from '../database/db';
+import { db, dbHelpers, ensureDefaultData, DataBackupSystem } from '../database/db';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import './ProgressStyles.css';
@@ -1319,7 +1319,63 @@ function Customize() {
                 {ensuringDefaults ? '⏳' : '🔄'} 
                 {ensuringDefaults ? 'Restoring...' : 'Restore Defaults'}
               </button>
+              
+              <button
+                className="btn btn-warning"
+                onClick={async () => {
+                  try {
+                    const result = await dbHelpers.recoverData();
+                    alert(result.method === 'backup' 
+                      ? 'Successfully recovered data from backup!' 
+                      : 'Restored default data as fallback.');
+                    window.location.reload();
+                  } catch (error) {
+                    alert('Recovery failed: ' + error.message);
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                🔧 Recover Lost Data
+              </button>
+              
+              <button
+                className="btn btn-secondary"
+                onClick={async () => {
+                  try {
+                    await dbHelpers.debugExport();
+                    alert('Debug export completed. Check your downloads folder.');
+                  } catch (error) {
+                    alert('Debug export failed: ' + error.message);
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                📊 Debug Export
+              </button>
             </div>
+            
+            {DataBackupSystem.hasBackup() && (
+              <div style={{
+                background: '#e8f5e8',
+                border: '1px solid #28a745',
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <h4 style={{margin: '0 0 8px 0'}}>🛡️ Backup Available</h4>
+                <p style={{margin: 0, fontSize: '0.9rem'}}>
+                  Automatic backup from: <strong>{DataBackupSystem.getBackupDate()?.toLocaleDateString()}</strong>
+                </p>
+              </div>
+            )}
 
             {importResult && (
               <div style={{
