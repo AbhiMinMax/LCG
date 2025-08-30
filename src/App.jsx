@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import Navigation from './components/Navigation';
 import ThemeToggle from './components/ThemeToggle';
@@ -17,19 +17,36 @@ import './App.css';
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
   const isWideLayout = location.pathname === '/analytics';
   
   useEffect(() => {
     // Ensure default data is available when the app starts
     ensureDefaultData();
   }, []);
+
+  const handleTitleClick = () => {
+    navigate('/');
+  };
   
   return (
     <div className="app">
       <header className="app-header">
         <div className="header-content">
           <div className="header-text">
-            <h1>🎮 Life Progress Tracker</h1>
+            <h1 
+              onClick={handleTitleClick}
+              style={{ 
+                cursor: 'pointer', 
+                userSelect: 'none',
+                transition: 'opacity 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.target.style.opacity = '0.7'}
+              onMouseLeave={(e) => e.target.style.opacity = '1'}
+              title="Go to home"
+            >
+              🎮 Life Progress Tracker
+            </h1>
             <p>Gamify your personal development</p>
           </div>
           <CloudSyncButton />
