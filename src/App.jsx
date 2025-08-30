@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import Navigation from './components/Navigation';
 import ThemeToggle from './components/ThemeToggle';
 import InstallPrompt from './components/InstallPrompt';
@@ -6,6 +7,7 @@ import PWAUninstall from './components/PWAUninstall';
 import ThemeProvider from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import CloudSyncButton from './components/CloudSyncButton';
+import { ensureDefaultData } from './database/db';
 import AddEvent from './screens/AddEvent';
 import CheckProgress from './screens/CheckProgress';
 import CheckHistory from './screens/CheckHistory';
@@ -16,6 +18,11 @@ import './App.css';
 function AppContent() {
   const location = useLocation();
   const isWideLayout = location.pathname === '/analytics';
+  
+  useEffect(() => {
+    // Ensure default data is available when the app starts
+    ensureDefaultData();
+  }, []);
   
   return (
     <div className="app">

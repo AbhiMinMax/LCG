@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db, dbHelpers } from '../database/db';
+import { db, dbHelpers, ensureDefaultData } from '../database/db';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import './ProgressStyles.css';
@@ -30,6 +30,11 @@ function Customize() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   
+  // Configuration states
+  const [dynamicXpEnabled, setDynamicXpEnabled] = useState(false);
+  const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
+  const [ensuringDefaults, setEnsuringDefaults] = useState(false);
+  
   // Form states
   const [showSituationForm, setShowSituationForm] = useState(false);
   const [showOpportunityForm, setShowOpportunityForm] = useState(false);
@@ -40,7 +45,10 @@ function Customize() {
     title: '',
     description: '',
     tags: [],
-    linkedOpportunities: []
+    linkedOpportunities: [],
+    challengingLevel: 3,
+    backThoughts: [],
+    forthThoughts: []
   });
   
   const [opportunityForm, setOpportunityForm] = useState({
@@ -53,7 +61,21 @@ function Customize() {
   useEffect(() => {
     loadData();
     loadDataStats();
+    loadConfig();
   }, []);
+
+  const loadConfig = async () => {
+    try {
+      const [dynamicXp, cloudSync] = await Promise.all([
+        dbHelpers.getConfig('dynamicXpEnabled', false),
+        dbHelpers.getConfig('cloudSyncEnabled', false)
+      ]);
+      setDynamicXpEnabled(dynamicXp);
+      setCloudSyncEnabled(cloudSync);
+    } catch (error) {
+      console.error('Error loading config:', error);
+    }
+  };
 
   useEffect(() => {
     const filterAndSortSituations = () => {
@@ -169,14 +191,20 @@ function Customize() {
           editingSituation.id,
           situationForm.title,
           situationForm.description,
-          situationForm.tags
+          situationForm.tags,
+          situationForm.challengingLevel,
+          situationForm.backThoughts,
+          situationForm.forthThoughts
         );
         situationId = editingSituation.id;
       } else {
         const newSituation = await dbHelpers.createSituation(
           situationForm.title,
           situationForm.description,
-          situationForm.tags
+          situationForm.tags,
+          situationForm.challengingLevel,
+          situationForm.backThoughts,
+          situationForm.forthThoughts
         );
         situationId = newSituation.id;
       }
@@ -199,7 +227,10 @@ function Customize() {
       title: situation.title,
       description: situation.description,
       tags: situation.tags || [],
-      linkedOpportunities: situation.opportunities.map(opp => opp.id)
+      linkedOpportunities: situation.opportunities.map(opp => opp.id),
+      challengingLevel: situation.challenging_level || 3,
+      backThoughts: situation.back_thoughts || [],
+      forthThoughts: situation.forth_thoughts || []
     });
     setShowSituationForm(true);
   };
@@ -297,7 +328,15 @@ function Customize() {
 
   // Form reset handlers
   const resetSituationForm = () => {
-    setSituationForm({ title: '', description: '', tags: [], linkedOpportunities: [] });
+    setSituationForm({ 
+      title: '', 
+      description: '', 
+      tags: [], 
+      linkedOpportunities: [],
+      challengingLevel: 3,
+      backThoughts: [],
+      forthThoughts: []
+    });
     setEditingSituation(null);
     setShowSituationForm(false);
   };
@@ -399,6 +438,9 @@ function Customize() {
       const result = await dbHelpers.importAllData(importData);
       setImportResult(result);
       
+      // Ensure default data is present after import
+      await ensureDefaultData();
+      
       // Reload all data
       await loadData();
       await loadDataStats();
@@ -412,6 +454,45 @@ function Customize() {
       alert(`Import failed: ${error.message}`);
     } finally {
       setImporting(false);
+    }
+  };
+
+  // Configuration handlers
+  const handleDynamicXpToggle = async () => {
+    try {
+      const newValue = !dynamicXpEnabled;
+      await dbHelpers.setConfig('dynamicXpEnabled', newValue);
+      setDynamicXpEnabled(newValue);
+    } catch (error) {
+      console.error('Error updating config:', error);
+      alert('Error updating configuration. Please try again.');
+    }
+  };
+
+  const handleCloudSyncToggle = async () => {
+    try {
+      const newValue = !cloudSyncEnabled;
+      await dbHelpers.setConfig('cloudSyncEnabled', newValue);
+      setCloudSyncEnabled(newValue);
+    } catch (error) {
+      console.error('Error updating config:', error);
+      alert('Error updating configuration. Please try again.');
+    }
+  };
+
+  // Ensure default data handler
+  const handleEnsureDefaults = async () => {
+    setEnsuringDefaults(true);
+    try {
+      await ensureDefaultData();
+      await loadData();
+      await loadDataStats();
+      alert('✅ Default situations and opportunities have been restored!');
+    } catch (error) {
+      console.error('Error ensuring defaults:', error);
+      alert('Error restoring defaults. Please try again.');
+    } finally {
+      setEnsuringDefaults(false);
     }
   };
 
@@ -572,6 +653,178 @@ function Customize() {
                 </div>
 
                 <div className="form-group">
+                  <label className="form-label">Challenging Level</label>
+                  <select
+                    className="form-select"
+                    value={situationForm.challengingLevel}
+                    onChange={(e) => setSituationForm({ ...situationForm, challengingLevel: parseInt(e.target.value) })}
+                  >
+                    <option value={1}>1 - Very Easy</option>
+                    <option value={2}>2 - Easy</option>
+                    <option value={3}>3 - Medium</option>
+                    <option value={4}>4 - Hard</option>
+                    <option value={5}>5 - Very Hard</option>
+                  </select>
+                  <small style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
+                    Higher challenging levels give more XP when dynamic XP is enabled
+                  </small>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{marginBottom: '8px'}}>💭 Internal Dialogue</label>
+                  <div style={{
+                    background: '#f8f9fa',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid #e9ecef',
+                    marginBottom: '12px'
+                  }}>
+                    <p style={{
+                      fontSize: '0.9rem',
+                      color: '#6c757d',
+                      margin: '0 0 8px 0',
+                      lineHeight: '1.4'
+                    }}>
+                      Create pairs of negative thoughts (😈 back) and positive responses (😇 forth) that counter them. 
+                      This helps identify the internal dialogue patterns in this situation.
+                    </p>
+                  </div>
+
+                  {/* Paired thoughts or individual management */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))'}}>
+                      {/* Back Thoughts Column */}
+                      <div>
+                        <label className="form-label" style={{color: '#dc3545', fontSize: '0.95rem', marginBottom: '8px', display: 'block'}}>
+                          😈 Back Thoughts (Negative/Limiting)
+                        </label>
+                        {situationForm.backThoughts.map((thought, index) => (
+                          <div key={`back-${index}`} style={{ marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                              <textarea
+                                className="form-input"
+                                value={thought}
+                                onChange={(e) => {
+                                  const newThoughts = [...situationForm.backThoughts];
+                                  newThoughts[index] = e.target.value;
+                                  setSituationForm({ ...situationForm, backThoughts: newThoughts });
+                                }}
+                                placeholder="e.g., 'I'm not good enough for this challenge...'"
+                                rows="3"
+                                style={{ 
+                                  resize: 'vertical', 
+                                  minHeight: '75px',
+                                  borderColor: '#dc3545',
+                                  borderWidth: '1px'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newBackThoughts = situationForm.backThoughts.filter((_, i) => i !== index);
+                                  const newForthThoughts = [...situationForm.forthThoughts];
+                                  // Also remove corresponding forth thought if it exists
+                                  if (newForthThoughts[index] !== undefined) {
+                                    newForthThoughts.splice(index, 1);
+                                  }
+                                  setSituationForm({ 
+                                    ...situationForm, 
+                                    backThoughts: newBackThoughts,
+                                    forthThoughts: newForthThoughts 
+                                  });
+                                }}
+                                style={{ padding: '4px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', marginTop: '4px', height: 'fit-content' }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Forth Thoughts Column */}
+                      <div>
+                        <label className="form-label" style={{color: '#007bff', fontSize: '0.95rem', marginBottom: '8px', display: 'block'}}>
+                          😇 Forth Thoughts (Positive Response)
+                        </label>
+                        {situationForm.forthThoughts.map((thought, index) => (
+                          <div key={`forth-${index}`} style={{ marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                              <textarea
+                                className="form-input"
+                                value={thought}
+                                onChange={(e) => {
+                                  const newThoughts = [...situationForm.forthThoughts];
+                                  newThoughts[index] = e.target.value;
+                                  setSituationForm({ ...situationForm, forthThoughts: newThoughts });
+                                }}
+                                placeholder="e.g., 'Growth happens outside my comfort zone, and I have what it takes to learn...'"
+                                rows="3"
+                                style={{ 
+                                  resize: 'vertical', 
+                                  minHeight: '75px',
+                                  borderColor: '#007bff',
+                                  borderWidth: '1px'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newForthThoughts = situationForm.forthThoughts.filter((_, i) => i !== index);
+                                  setSituationForm({ ...situationForm, forthThoughts: newForthThoughts });
+                                }}
+                                style={{ padding: '4px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', marginTop: '4px', height: 'fit-content' }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Add pair button */}
+                    <div style={{display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '16px'}}>
+                      <button
+                        type="button"
+                        onClick={() => setSituationForm({ 
+                          ...situationForm, 
+                          backThoughts: [...situationForm.backThoughts, ''],
+                          forthThoughts: [...situationForm.forthThoughts, '']
+                        })}
+                        style={{ 
+                          padding: '8px 16px', 
+                          background: '#6c757d', 
+                          color: 'white', 
+                          border: 'none', 
+                          borderRadius: '6px', 
+                          fontSize: '0.9rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        💭 Add Thought Pair
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSituationForm({ ...situationForm, backThoughts: [...situationForm.backThoughts, ''] })}
+                        style={{ padding: '6px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.85rem' }}
+                      >
+                        + Back Only
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSituationForm({ ...situationForm, forthThoughts: [...situationForm.forthThoughts, ''] })}
+                        style={{ padding: '6px 12px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.85rem' }}
+                      >
+                        + Forth Only
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">Linked Opportunities</label>
                   <div className="opportunities-checklist">
                     {opportunities.map(opp => (
@@ -604,7 +857,21 @@ function Customize() {
             {situations.map(situation => (
               <div key={situation.id} className="card item-card">
                 <div className="item-header">
-                  <h4>{situation.title}</h4>
+                  <div className="item-title-section">
+                    <h4>{situation.title}</h4>
+                    <div className="situation-stats">
+                      <span className="challenging-badge" style={{
+                        background: situation.challenging_level >= 4 ? '#dc3545' : situation.challenging_level >= 3 ? '#ffc107' : '#28a745',
+                        color: 'white',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold'
+                      }}>
+                        Level {situation.challenging_level}/5
+                      </span>
+                    </div>
+                  </div>
                   <div className="item-actions">
                     <button
                       className="btn-icon"
@@ -911,6 +1178,58 @@ function Customize() {
                 Add custom tags when creating situations and opportunities. Use the filter feature in Progress screen to find items by tags.
               </p>
             </div>
+
+            <div style={{
+              padding: '15px',
+              background: 'var(--bg-tertiary)',
+              borderRadius: '8px',
+              marginBottom: '20px'
+            }}>
+              <h4 style={{margin: '0 0 12px 0', fontSize: '1rem'}}>⚡ XP System</h4>
+              <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px'}}>
+                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'}}>
+                  <input
+                    type="checkbox"
+                    checked={dynamicXpEnabled}
+                    onChange={handleDynamicXpToggle}
+                    style={{transform: 'scale(1.2)'}}
+                  />
+                  <span style={{fontWeight: 'bold'}}>Dynamic XP</span>
+                </label>
+              </div>
+              <p style={{margin: '0', fontSize: '0.9rem', color: 'var(--text-secondary)'}}>
+                {dynamicXpEnabled 
+                  ? "XP rewards are multiplied based on situation challenging level. Higher challenging levels give more XP." 
+                  : "XP rewards are fixed regardless of situation challenging level."
+                }
+              </p>
+            </div>
+
+            <div style={{
+              padding: '15px',
+              background: 'var(--bg-tertiary)',
+              borderRadius: '8px',
+              marginBottom: '20px'
+            }}>
+              <h4 style={{margin: '0 0 12px 0', fontSize: '1rem'}}>☁️ Cloud Sync</h4>
+              <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px'}}>
+                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'}}>
+                  <input
+                    type="checkbox"
+                    checked={cloudSyncEnabled}
+                    onChange={handleCloudSyncToggle}
+                    style={{transform: 'scale(1.2)'}}
+                  />
+                  <span style={{fontWeight: 'bold'}}>Enable Cloud Sync</span>
+                </label>
+              </div>
+              <p style={{margin: '0', fontSize: '0.9rem', color: 'var(--text-secondary)'}}>
+                {cloudSyncEnabled 
+                  ? "Cloud sync button is visible. You can sync your data to the cloud." 
+                  : "Cloud sync is disabled and the sync button is hidden from the interface."
+                }
+              </p>
+            </div>
           </div>
 
           {/* Data Export/Import */}
@@ -984,6 +1303,22 @@ function Customize() {
                 {importing ? '⏳' : '📥'} 
                 {importing ? 'Importing...' : 'Import Data'}
               </button>
+              
+              <button
+                className="btn btn-outline"
+                onClick={handleEnsureDefaults}
+                disabled={ensuringDefaults}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  border: '1px solid #6c757d',
+                  color: '#6c757d'
+                }}
+              >
+                {ensuringDefaults ? '⏳' : '🔄'} 
+                {ensuringDefaults ? 'Restoring...' : 'Restore Defaults'}
+              </button>
             </div>
 
             {importResult && (
@@ -1009,6 +1344,7 @@ function Customize() {
             }}>
               <p><strong>Export:</strong> Download all your data as a JSON file for backup or transfer.</p>
               <p><strong>Import:</strong> Upload a previously exported JSON file. This will replace all current data.</p>
+              <p><strong>Restore Defaults:</strong> Ensures essential situations and opportunities are always available. Safe to use - won't delete your custom data.</p>
               <p><strong>⚠️ Warning:</strong> Import will permanently delete all existing data. Make sure to export first if you want to keep your current data.</p>
             </div>
           </div>

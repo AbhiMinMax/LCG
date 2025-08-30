@@ -13,11 +13,29 @@ const CloudSyncButton = () => {
   const [syncMessage, setSyncMessage] = useState('');
   const [rateLimitStatus, setRateLimitStatus] = useState(null);
   const [lastSyncResult, setLastSyncResult] = useState(null);
+  const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
 
   useEffect(() => {
-    // Update rate limit status every second
+    // Load cloud sync configuration
+    const loadCloudSyncConfig = async () => {
+      try {
+        const enabled = await dbHelpers.getConfig('cloudSyncEnabled', false);
+        setCloudSyncEnabled(enabled);
+      } catch (error) {
+        console.error('Error loading cloud sync config:', error);
+      }
+    };
+
+    loadCloudSyncConfig();
+
+    // Update rate limit status every second and check config periodically
     const interval = setInterval(() => {
       setRateLimitStatus(getRateLimitStatus());
+      
+      // Check config every 5 seconds for changes
+      if (Date.now() % 5000 < 1000) {
+        loadCloudSyncConfig();
+      }
     }, 1000);
 
     return () => clearInterval(interval);
@@ -208,6 +226,11 @@ const CloudSyncButton = () => {
     const remainingSeconds = seconds % 60;
     return `${minutes}m ${remainingSeconds}s`;
   };
+
+  // Don't render anything if cloud sync is disabled
+  if (!cloudSyncEnabled) {
+    return null;
+  }
 
   return (
     <>
