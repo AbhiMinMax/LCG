@@ -21,9 +21,7 @@
       "Bash(git checkout:*)",
       "Bash(git merge:*)",
       "Bash(git branch:*)",
-      "Bash(node:*)",
-      "Bash(git config:*)",
-      "Bash(cat:*)"
+      "Bash(node:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

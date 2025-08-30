@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Navigation from './components/Navigation';
 import ThemeToggle from './components/ThemeToggle';
 import InstallPrompt from './components/InstallPrompt';
@@ -7,8 +7,7 @@ import PWAUninstall from './components/PWAUninstall';
 import ThemeProvider from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import CloudSyncButton from './components/CloudSyncButton';
-import DataRecovery from './components/DataRecovery';
-import { ensureDefaultData, db } from './database/db';
+import { ensureDefaultData } from './database/db';
 import AddEvent from './screens/AddEvent';
 import CheckProgress from './screens/CheckProgress';
 import CheckHistory from './screens/CheckHistory';
@@ -20,32 +19,10 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const isWideLayout = location.pathname === '/analytics';
-  const [showDataRecovery, setShowDataRecovery] = useState(false);
   
   useEffect(() => {
     // Ensure default data is available when the app starts
-    const initializeApp = async () => {
-      try {
-        await ensureDefaultData();
-        
-        // Check if we have any data after initialization
-        const [situationCount, opportunityCount, eventCount] = await Promise.all([
-          db.situations.count(),
-          db.opportunities.count(),
-          db.events.count()
-        ]);
-        
-        // If still no data, show recovery dialog
-        if (situationCount === 0 && opportunityCount === 0 && eventCount === 0) {
-          setShowDataRecovery(true);
-        }
-      } catch (error) {
-        console.error('Error initializing app:', error);
-        setShowDataRecovery(true);
-      }
-    };
-    
-    initializeApp();
+    ensureDefaultData();
   }, []);
 
   const handleTitleClick = () => {
@@ -91,17 +68,6 @@ function AppContent() {
       <ThemeToggle />
       <InstallPrompt />
       <PWAUninstall />
-      
-      {showDataRecovery && (
-        <DataRecovery 
-          onClose={() => setShowDataRecovery(false)}
-          onRecoveryComplete={() => {
-            setShowDataRecovery(false);
-            // Refresh the page to reload data
-            window.location.reload();
-          }}
-        />
-      )}
     </div>
   );
 }
