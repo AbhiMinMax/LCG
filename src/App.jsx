@@ -26,7 +26,7 @@ function AppContent() {
   }, []);
 
   const handleTitleClick = () => {
-    navigate('/');
+    navigate('/LCG');
   };
   
   return (

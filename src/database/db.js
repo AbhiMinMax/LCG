@@ -74,6 +74,9 @@ export const dbHelpers = {
       db.opportunities.count()
     ]);
     
+    // Fix existing situations without challenging_level
+    await this.fixLegacySituations();
+    
     // If no data exists, create full sample data
     if (situationCount === 0 && opportunityCount === 0) {
       await this.createInitialSampleData();
@@ -85,6 +88,35 @@ export const dbHelpers = {
     
     // Ensure we have at least basic default opportunities
     await this.ensureDefaultOpportunities();
+  },
+
+  // Fix legacy situations that don't have new fields
+  async fixLegacySituations() {
+    try {
+      const allSituations = await db.situations.toArray();
+      const situationsToUpdate = allSituations.filter(situation => 
+        situation.challenging_level === undefined || 
+        !situation.back_thoughts || 
+        !situation.forth_thoughts
+      );
+
+      if (situationsToUpdate.length > 0) {
+        const updates = situationsToUpdate.map(situation => ({
+          key: situation.id,
+          changes: {
+            challenging_level: situation.challenging_level || 3, // Default medium
+            back_thoughts: situation.back_thoughts || [],
+            forth_thoughts: situation.forth_thoughts || [],
+            updated_at: new Date()
+          }
+        }));
+
+        await db.situations.bulkUpdate(updates);
+        console.log(`Fixed ${situationsToUpdate.length} legacy situations with new fields`);
+      }
+    } catch (error) {
+      console.error('Error fixing legacy situations:', error);
+    }
   },
 
   // Create comprehensive initial sample data
@@ -499,8 +531,8 @@ export const dbHelpers = {
     let xp = baseXpMap[choiceValue] || 0;
     
     if (isDynamicXp && challengingLevel) {
-      // Apply challenging level multiplier (1-5 scale)
-      const multiplier = challengingLevel / 3; // Base level 3 = 1x multiplier
+      // Apply challenging level multiplier (1-5 scale), minimum 1.0x
+      const multiplier = Math.max(1.0, challengingLevel / 3); // Base level 3 = 1x, minimum 1x
       xp = Math.round(xp * multiplier);
     }
     

@@ -165,7 +165,7 @@ function AddEvent() {
     
     // Apply dynamic XP calculation if enabled and we have a situation
     if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-      const multiplier = currentSituation.challenging_level / 3; // Base level 3 = 1x multiplier
+      const multiplier = Math.max(1.0, currentSituation.challenging_level / 3); // Base level 3 = 1x, minimum 1x
       xp = Math.round(xp * multiplier);
     }
     
@@ -221,7 +221,7 @@ function AddEvent() {
             <strong style={{color: '#495057'}}>Dynamic XP Active</strong>
           </div>
           <p style={{margin: '0', fontSize: '0.9em', color: '#6c757d'}}>
-            XP rewards are being multiplied by {(currentSituation.challenging_level / 3).toFixed(1)}x due to this situation's challenging level ({currentSituation.challenging_level}/5).
+            XP rewards are being multiplied by {Math.max(1.0, currentSituation.challenging_level / 3).toFixed(1)}x due to this situation's challenging level ({currentSituation.challenging_level}/5).
           </p>
         </div>
       )}
@@ -344,7 +344,7 @@ function AddEvent() {
                         } else {
                           let displayXp = choice.xp;
                           if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-                            const multiplier = currentSituation.challenging_level / 3;
+                            const multiplier = Math.max(1.0, currentSituation.challenging_level / 3);
                             displayXp = Math.round(choice.xp * multiplier);
                           }
                           return `${displayXp > 0 ? '+' : ''}${displayXp} XP`;
@@ -352,7 +352,7 @@ function AddEvent() {
                       })()}
                       {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
                         <span style={{fontSize: '0.8em', marginLeft: '4px', opacity: 0.7}}>
-                          (×{(currentSituation.challenging_level / 3).toFixed(1)})
+                          (×{Math.max(1.0, currentSituation.challenging_level / 3).toFixed(1)})
                         </span>
                       )}
                     </div>
