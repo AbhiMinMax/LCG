@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="application-name" content="Life Progress Tracker" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Life Progress Tracker" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="msapplication-TileColor" content="#646cff" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    <meta name="theme-color" content="#646cff" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/LCG/manifest.json" />
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="/LCG/vite.svg" />
+    <link rel="apple-touch-icon" href="/LCG/pwa-192x192.png" />
+    <link rel="mask-icon" href="/LCG/pwa-192x192.png" color="#646cff" />
+    
+    <title>Life Progress Tracker</title>
+    <script type="module" crossorigin src="/LCG/assets/index-CE-Xdvme.js"></script>
+    <link rel="stylesheet" crossorigin href="/LCG/assets/index-z3VaQsux.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    
+    <!-- GitHub Pages SPA redirect handler -->
+    <script type="text/javascript">
+      // Single Page Apps for GitHub Pages
+      // MIT License
+      // This script checks if a redirect is present in the URL and
+      // resets the history to the correct path for the SPA
+      (function(l) {
+        if (l.search[1] === '/' ) {
+          var decoded = l.search.slice(1).split('&').map(function(s) { 
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          window.history.replaceState(null, null,
+              l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      }(window.location))
+    </script>
+    
+  </body>
+</html>
