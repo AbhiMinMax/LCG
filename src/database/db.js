@@ -40,25 +40,111 @@ export class LifeProgressDB extends Dexie {
       situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
       events: '++id, title, situation_id, event_description, choice_value, xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
       config: '++id, key, value'
-    }).upgrade(tx => {
-      // Add default challenging_level and thought arrays to existing situations
-      return tx.situations.toCollection().modify(situation => {
-        if (situation.challenging_level === undefined) {
-          situation.challenging_level = 3; // Default medium challenging level
-        }
-        if (!situation.back_thoughts) {
-          situation.back_thoughts = [];
-        }
-        if (!situation.forth_thoughts) {
-          situation.forth_thoughts = [];
-        }
-      });
+    }).upgrade(async tx => {
+      console.log('Upgrading database to version 3...');
+      try {
+        // Add default challenging_level and thought arrays to existing situations
+        const situationsUpdated = await tx.situations.toCollection().modify(situation => {
+          if (situation.challenging_level === undefined) {
+            situation.challenging_level = 3; // Default medium challenging level
+          }
+          if (!situation.back_thoughts) {
+            situation.back_thoughts = [];
+          }
+          if (!situation.forth_thoughts) {
+            situation.forth_thoughts = [];
+          }
+        });
+        console.log(`Successfully upgraded ${situationsUpdated} situations to version 3`);
+      } catch (error) {
+        console.error('Error during version 3 upgrade:', error);
+        throw error; // Re-throw to prevent partial upgrade
+      }
     });
   }
 }
 
 // Create database instance
 export const db = new LifeProgressDB();
+
+// Backup system to prevent data loss during upgrades
+class DataBackupSystem {
+  static BACKUP_KEY = 'lcg_data_backup';
+  static BACKUP_VERSION_KEY = 'lcg_backup_version';
+  
+  static async createBackup() {
+    try {
+      console.log('Creating automatic data backup...');
+      const backup = await dbHelpers.exportData();
+      localStorage.setItem(this.BACKUP_KEY, JSON.stringify(backup));
+      localStorage.setItem(this.BACKUP_VERSION_KEY, Date.now().toString());
+      console.log('Backup created successfully');
+      return true;
+    } catch (error) {
+      console.error('Error creating backup:', error);
+      return false;
+    }
+  }
+  
+  static async restoreFromBackup() {
+    try {
+      const backupData = localStorage.getItem(this.BACKUP_KEY);
+      if (!backupData) {
+        console.log('No backup data found');
+        return false;
+      }
+      
+      console.log('Restoring from backup...');
+      const backup = JSON.parse(backupData);
+      await dbHelpers.importData(backup);
+      console.log('Data restored from backup successfully');
+      return true;
+    } catch (error) {
+      console.error('Error restoring from backup:', error);
+      return false;
+    }
+  }
+  
+  static hasBackup() {
+    return localStorage.getItem(this.BACKUP_KEY) !== null;
+  }
+  
+  static getBackupDate() {
+    const timestamp = localStorage.getItem(this.BACKUP_VERSION_KEY);
+    return timestamp ? new Date(parseInt(timestamp)) : null;
+  }
+}
+
+// Enhanced database initialization with backup protection
+db.ready = db.ready.then(async () => {
+  console.log('Database ready, checking for data integrity...');
+  
+  // Check if we have existing data
+  const [situationCount, opportunityCount, eventCount] = await Promise.all([
+    db.situations.count(),
+    db.opportunities.count(), 
+    db.events.count()
+  ]);
+  
+  const hasExistingData = situationCount > 0 || opportunityCount > 0 || eventCount > 0;
+  
+  // If we have no data but there's a backup, offer to restore
+  if (!hasExistingData && DataBackupSystem.hasBackup()) {
+    console.warn('No data found but backup exists. This might indicate data loss during upgrade.');
+    const backupDate = DataBackupSystem.getBackupDate();
+    console.log(`Backup available from: ${backupDate}`);
+    
+    // For now, auto-restore. In production, you might want to ask the user
+    if (confirm(`No data found in database, but a backup from ${backupDate?.toLocaleDateString()} is available. Restore from backup?`)) {
+      await DataBackupSystem.restoreFromBackup();
+    }
+  } else if (hasExistingData) {
+    // Create a backup if we have data
+    await DataBackupSystem.createBackup();
+  }
+});
+
+export { DataBackupSystem };
 
 // Database helper functions
 export const dbHelpers = {
@@ -505,6 +591,11 @@ export const dbHelpers = {
     return result;
   },
 
+  // Get a single situation by ID
+  async getSituation(situationId) {
+    return await db.situations.get(situationId);
+  },
+
   // Get opportunities linked to a specific situation
   async getOpportunitiesForSituation(situationId) {
     const links = await db.situation_opportunities
@@ -889,6 +980,49 @@ export const dbHelpers = {
       return exportData;
     } catch (error) {
       console.error('Error exporting data:', error);
+      throw error;
+    }
+  },
+
+  // Manual data recovery function
+  async recoverData() {
+    console.log('Starting manual data recovery...');
+    
+    // Try to restore from backup first
+    if (DataBackupSystem.hasBackup()) {
+      const restored = await DataBackupSystem.restoreFromBackup();
+      if (restored) {
+        console.log('Data recovered from automatic backup');
+        return { success: true, method: 'backup' };
+      }
+    }
+    
+    // If no backup or restore failed, ensure we have at least default data
+    await this.ensureDefaultData();
+    console.log('Default data ensured as fallback');
+    return { success: true, method: 'defaults' };
+  },
+
+  // Export current data state for debugging
+  async debugExport() {
+    try {
+      const data = await this.exportData();
+      console.log('Current database state:', data);
+      
+      // Also save to a downloadable file
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lcg-debug-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      return data;
+    } catch (error) {
+      console.error('Error during debug export:', error);
       throw error;
     }
   },

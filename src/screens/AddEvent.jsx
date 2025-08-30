@@ -45,7 +45,7 @@ function AddEvent() {
       try {
         const [opportunities, situation] = await Promise.all([
           dbHelpers.getOpportunitiesForSituation(parseInt(selectedSituation)),
-          situations.find(s => s.id === parseInt(selectedSituation))
+          dbHelpers.getSituation(parseInt(selectedSituation))
         ]);
         setAffectedOpportunities(opportunities);
         setCurrentSituation(situation);
@@ -164,8 +164,9 @@ function AddEvent() {
     let xp = choice.xp;
     
     // Apply dynamic XP calculation if enabled and we have a situation
-    if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-      const multiplier = Math.max(1.0, currentSituation.challenging_level / 3); // Base level 3 = 1x, minimum 1x
+    if (dynamicXpEnabled && currentSituation) {
+      const challengingLevel = currentSituation.challenging_level || 3; // Default to 3 if undefined
+      const multiplier = Math.max(1.0, challengingLevel / 3); // Base level 3 = 1x, minimum 1x
       xp = Math.round(xp * multiplier);
     }
     
@@ -214,14 +215,14 @@ function AddEvent() {
         </div>
       )}
 
-      {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
+      {dynamicXpEnabled && currentSituation && (currentSituation.challenging_level || 3) !== 3 && (
         <div className="card" style={{background: '#f8f9fa', border: '1px solid #e9ecef'}}>
           <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px'}}>
             <span style={{fontSize: '1.2em'}}>⚡</span>
             <strong style={{color: '#495057'}}>Dynamic XP Active</strong>
           </div>
           <p style={{margin: '0', fontSize: '0.9em', color: '#6c757d'}}>
-            XP rewards are being multiplied by {Math.max(1.0, currentSituation.challenging_level / 3).toFixed(1)}x due to this situation's challenging level ({currentSituation.challenging_level}/5).
+            XP rewards are being multiplied by {Math.max(1.0, (currentSituation.challenging_level || 3) / 3).toFixed(1)}x due to this situation's challenging level ({currentSituation.challenging_level || 3}/5).
           </p>
         </div>
       )}
@@ -343,16 +344,17 @@ function AddEvent() {
                           return `${currentXp > 0 ? '+' : ''}${currentXp} XP`;
                         } else {
                           let displayXp = choice.xp;
-                          if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-                            const multiplier = Math.max(1.0, currentSituation.challenging_level / 3);
+                          if (dynamicXpEnabled && currentSituation) {
+                            const challengingLevel = currentSituation.challenging_level || 3; // Default to 3 if undefined
+                            const multiplier = Math.max(1.0, challengingLevel / 3);
                             displayXp = Math.round(choice.xp * multiplier);
                           }
                           return `${displayXp > 0 ? '+' : ''}${displayXp} XP`;
                         }
                       })()}
-                      {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
+                      {dynamicXpEnabled && currentSituation && (currentSituation.challenging_level || 3) !== 3 && (
                         <span style={{fontSize: '0.8em', marginLeft: '4px', opacity: 0.7}}>
-                          (×{Math.max(1.0, currentSituation.challenging_level / 3).toFixed(1)})
+                          (×{Math.max(1.0, (currentSituation.challenging_level || 3) / 3).toFixed(1)})
                         </span>
                       )}
                     </div>
@@ -413,9 +415,9 @@ function AddEvent() {
             <p>
               This event will {getChoiceXp() >= 0 ? 'add' : 'subtract'} <strong>{Math.abs(getChoiceXp())} XP</strong> to:
               {dynamicXpEnabled ? (
-                currentSituation && currentSituation.challenging_level !== 3 && (
+                currentSituation && (currentSituation.challenging_level || 3) !== 3 && (
                   <span style={{fontSize: '0.9em', color: '#666', marginLeft: '8px'}}>
-                    (Challenging Level {currentSituation.challenging_level}/5 applied)
+                    (Challenging Level {currentSituation.challenging_level || 3}/5 applied)
                   </span>
                 )
               ) : (
