@@ -91,13 +91,13 @@ function Customize() {
       
       switch (situationSortBy) {
         case 'alphabetical':
-          filtered.sort((a, b) => a.title.localeCompare(b.title));
+          filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
           break;
         case 'created':
-          filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          filtered = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
           break;
         case 'updated':
-          filtered.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+          filtered = [...filtered].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
           break;
       }
       
@@ -121,10 +121,10 @@ function Customize() {
       
       switch (opportunitySortBy) {
         case 'alphabetical':
-          filtered.sort((a, b) => a.title.localeCompare(b.title));
+          filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
           break;
         case 'level':
-          filtered.sort((a, b) => {
+          filtered = [...filtered].sort((a, b) => {
             if (b.current_level !== a.current_level) {
               return b.current_level - a.current_level;
             }
@@ -132,10 +132,10 @@ function Customize() {
           });
           break;
         case 'xp':
-          filtered.sort((a, b) => b.current_xp - a.current_xp);
+          filtered = [...filtered].sort((a, b) => b.current_xp - a.current_xp);
           break;
         case 'created':
-          filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          filtered = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
           break;
       }
       
