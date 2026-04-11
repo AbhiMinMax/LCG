@@ -87,8 +87,15 @@ function CheckHistory() {
       event.situation.title.toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
-      const diff = new Date(a.timestamp) - new Date(b.timestamp);
-      return sortOrder === 'desc' ? -diff : diff;
+      switch (sortOrder) {
+        case 'desc': return new Date(b.timestamp) - new Date(a.timestamp);
+        case 'asc':  return new Date(a.timestamp) - new Date(b.timestamp);
+        case 'xp_high': return b.xp_change - a.xp_change;
+        case 'xp_low':  return a.xp_change - b.xp_change;
+        case 'situation': return a.situation.title.localeCompare(b.situation.title);
+        case 'choice': return b.choice_value - a.choice_value;
+        default: return 0;
+      }
     });
 
   const getEventStats = () => {
@@ -155,22 +162,25 @@ function CheckHistory() {
           />
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Sort by Date</label>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              className={`btn ${sortOrder === 'desc' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ flex: 1, fontSize: '0.9em' }}
-              onClick={() => setSortOrder('desc')}
-            >
-              Newest First
-            </button>
-            <button
-              className={`btn ${sortOrder === 'asc' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ flex: 1, fontSize: '0.9em' }}
-              onClick={() => setSortOrder('asc')}
-            >
-              Oldest First
-            </button>
+          <label className="form-label">Sort By</label>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {[
+              { key: 'desc',      label: 'Newest' },
+              { key: 'asc',       label: 'Oldest' },
+              { key: 'xp_high',   label: 'XP High' },
+              { key: 'xp_low',    label: 'XP Low' },
+              { key: 'situation', label: 'Situation' },
+              { key: 'choice',    label: 'Response' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                className={`btn ${sortOrder === opt.key ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.85em', padding: '6px 12px' }}
+                onClick={() => setSortOrder(opt.key)}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -249,6 +259,24 @@ function CheckHistory() {
                       </div>
                     </div>
                   </div>
+
+                  {(event.selected_back_thought || event.selected_forth_thought) && (
+                    <div className="detail-section">
+                      <h4>💭 Thoughts During Event</h4>
+                      {event.selected_back_thought && (
+                        <div className="detail-item">
+                          <span className="detail-label" style={{ color: '#dc3545' }}>😈 Back thought:</span>
+                          <span className="detail-value">{event.selected_back_thought}</span>
+                        </div>
+                      )}
+                      {event.selected_forth_thought && (
+                        <div className="detail-item">
+                          <span className="detail-label" style={{ color: '#007bff' }}>😇 Forth thought:</span>
+                          <span className="detail-value">{event.selected_forth_thought}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="detail-section">
                     <h4>📊 Affected Opportunities</h4>
