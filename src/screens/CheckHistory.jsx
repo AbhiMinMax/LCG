@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { dbHelpers } from '../database/db';
+import { ThoughtPassage } from '../components/ThoughtPassage';
 import './ProgressStyles.css';
 
 const CHOICE_LABELS = {
@@ -279,15 +280,19 @@ function CheckHistory() {
                     <div className="detail-section">
                       <h4>💭 Thoughts During Event</h4>
                       {event.selected_back_thought && (
-                        <div className="detail-item">
-                          <span className="detail-label" style={{ color: '#dc3545' }}>😈 Back thought:</span>
-                          <span className="detail-value">{event.selected_back_thought}</span>
+                        <div style={{ marginBottom: '8px' }}>
+                          <div style={{ fontSize: '0.78rem', color: '#c62828', fontWeight: 600, marginBottom: '4px' }}>
+                            😈 Unhelpful thought
+                          </div>
+                          <ThoughtPassage thought={event.selected_back_thought} type="back" />
                         </div>
                       )}
                       {event.selected_forth_thought && (
-                        <div className="detail-item">
-                          <span className="detail-label" style={{ color: '#007bff' }}>😇 Forth thought:</span>
-                          <span className="detail-value">{event.selected_forth_thought}</span>
+                        <div>
+                          <div style={{ fontSize: '0.78rem', color: '#1565c0', fontWeight: 600, marginBottom: '4px' }}>
+                            😇 Helpful thought
+                          </div>
+                          <ThoughtPassage thought={event.selected_forth_thought} type="forth" />
                         </div>
                       )}
                     </div>

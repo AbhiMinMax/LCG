@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { dbHelpers } from '../database/db';
+import { ThoughtPair } from '../components/ThoughtPassage';
 
 const CHOICE_OPTIONS = [
   { value: 1, label: 'Misguided Action', xp: -3, color: '#dc3545' },
@@ -78,8 +79,9 @@ function AddEvent() {
   const loadSituations = async () => {
     try {
       const situationsData = await dbHelpers.getSituationsWithOpportunities();
-      setSituations(situationsData);
-      setFilteredSituations(situationsData);
+      const sorted = [...situationsData].sort((a, b) => a.title.localeCompare(b.title));
+      setSituations(sorted);
+      setFilteredSituations(sorted);
     } catch (error) {
       console.error('Error loading situations:', error);
     } finally {
@@ -96,12 +98,14 @@ function AddEvent() {
       return;
     }
     
-    const filtered = situations.filter(situation => 
-      situation.title.toLowerCase().includes(query) ||
-      situation.description.toLowerCase().includes(query) ||
-      (situation.tags && situation.tags.some(tag => tag.toLowerCase().includes(query)))
-    );
-    
+    const filtered = situations
+      .filter(situation =>
+        situation.title.toLowerCase().includes(query) ||
+        situation.description.toLowerCase().includes(query) ||
+        (situation.tags && situation.tags.some(tag => tag.toLowerCase().includes(query)))
+      )
+      .sort((a, b) => a.title.localeCompare(b.title));
+
     setFilteredSituations(filtered);
   };
 
@@ -381,26 +385,22 @@ function AddEvent() {
           {currentSituation && (currentSituation.back_thoughts?.length > 0 || currentSituation.forth_thoughts?.length > 0) && (
             <div className="form-group">
               <label className="form-label">💭 Common Thoughts in This Situation</label>
-              {currentSituation.back_thoughts?.length > 0 && (
-                <div style={{ marginBottom: '10px' }}>
-                  <div style={{ fontSize: '0.85rem', color: '#dc3545', fontWeight: 600, marginBottom: '4px' }}>😈 Unhelpful thoughts</div>
-                  <ul style={{ margin: 0, paddingLeft: '18px', color: '#555', fontSize: '0.9em' }}>
-                    {currentSituation.back_thoughts.map((thought, index) => (
-                      <li key={index} style={{ marginBottom: '2px' }}>{thought}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {currentSituation.forth_thoughts?.length > 0 && (
-                <div>
-                  <div style={{ fontSize: '0.85rem', color: '#007bff', fontWeight: 600, marginBottom: '4px' }}>😇 Helpful thoughts</div>
-                  <ul style={{ margin: 0, paddingLeft: '18px', color: '#555', fontSize: '0.9em' }}>
-                    {currentSituation.forth_thoughts.map((thought, index) => (
-                      <li key={index} style={{ marginBottom: '2px' }}>{thought}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <div style={{ marginBottom: '4px', display: 'flex', gap: '16px', fontSize: '0.78rem', color: 'var(--text-muted, #888)' }}>
+                {currentSituation.back_thoughts?.length > 0 && <span>😈 Unhelpful</span>}
+                {currentSituation.forth_thoughts?.length > 0 && <span>😇 Helpful</span>}
+              </div>
+              {Array.from({
+                length: Math.max(
+                  currentSituation.back_thoughts?.length || 0,
+                  currentSituation.forth_thoughts?.length || 0
+                )
+              }, (_, i) => (
+                <ThoughtPair
+                  key={i}
+                  backThought={currentSituation.back_thoughts?.[i]}
+                  forthThought={currentSituation.forth_thoughts?.[i]}
+                />
+              ))}
             </div>
           )}
 

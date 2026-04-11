@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db, dbHelpers, ensureDefaultData } from '../database/db';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
+import { ThoughtPair } from '../components/ThoughtPassage';
 import './ProgressStyles.css';
 
 function Customize() {
@@ -221,8 +222,8 @@ function Customize() {
       await dbHelpers.linkSituationToOpportunities(situationId, situationForm.linkedOpportunities);
 
       resetSituationForm();
-      loadData();
-      
+      await loadData();
+
     } catch (error) {
       console.error('Error saving situation:', error);
       alert('Error saving situation. Please try again.');
@@ -293,8 +294,8 @@ function Customize() {
       }
 
       resetOpportunityForm();
-      loadData();
-      
+      await loadData();
+
     } catch (error) {
       console.error('Error saving opportunity:', error);
       alert('Error saving opportunity. Please try again.');
@@ -929,6 +930,27 @@ function Customize() {
                   </div>
                 )}
                 
+                {((situation.back_thoughts?.length > 0) || (situation.forth_thoughts?.length > 0)) && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted, #888)', marginBottom: '6px' }}>
+                      💭 Thoughts
+                    </div>
+                    {Array.from({
+                      length: Math.max(
+                        situation.back_thoughts?.length || 0,
+                        situation.forth_thoughts?.length || 0
+                      )
+                    }, (_, i) => (
+                      <ThoughtPair
+                        key={i}
+                        backThought={situation.back_thoughts?.[i]}
+                        forthThought={situation.forth_thoughts?.[i]}
+                        defaultExpanded={false}
+                      />
+                    ))}
+                  </div>
+                )}
+
                 <div className="item-meta">
                   <div className="linked-opportunities">
                     <strong>Linked Opportunities:</strong>
