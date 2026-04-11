@@ -23,6 +23,7 @@ function Customize() {
   const [selectedOpportunityTags, setSelectedOpportunityTags] = useState([]);
   const [situationSortBy, setSituationSortBy] = useState('alphabetical');
   const [opportunitySortBy, setOpportunitySortBy] = useState('alphabetical');
+  const [filterSituationThoughts, setFilterSituationThoughts] = useState(false);
   
   // Export/Import states
   const [dataStats, setDataStats] = useState(null);
@@ -80,15 +81,22 @@ function Customize() {
   useEffect(() => {
     const filterAndSortSituations = () => {
       let filtered = allSituations;
-      
+
       if (selectedSituationTags.length > 0) {
-        filtered = allSituations.filter(situation => 
-          situation.tags && 
+        filtered = allSituations.filter(situation =>
+          situation.tags &&
           Array.isArray(situation.tags) &&
           selectedSituationTags.some(tag => situation.tags.includes(tag))
         );
       }
-      
+
+      if (filterSituationThoughts) {
+        filtered = filtered.filter(situation =>
+          (situation.back_thoughts && situation.back_thoughts.length > 0) ||
+          (situation.forth_thoughts && situation.forth_thoughts.length > 0)
+        );
+      }
+
       switch (situationSortBy) {
         case 'alphabetical':
           filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
@@ -100,12 +108,12 @@ function Customize() {
           filtered = [...filtered].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
           break;
       }
-      
+
       setSituations(filtered);
     };
-    
+
     filterAndSortSituations();
-  }, [situationSortBy, selectedSituationTags, allSituations]);
+  }, [situationSortBy, selectedSituationTags, filterSituationThoughts, allSituations]);
 
   useEffect(() => {
     const filterAndSortOpportunities = () => {
@@ -563,6 +571,15 @@ function Customize() {
                 <option value="created">Newest First</option>
                 <option value="updated">Recently Updated</option>
               </select>
+            </div>
+            <div style={{ marginTop: '12px' }}>
+              <button
+                className={`btn ${filterSituationThoughts ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.85em', padding: '6px 12px' }}
+                onClick={() => setFilterSituationThoughts(f => !f)}
+              >
+                💭 With Thoughts Only {filterSituationThoughts ? `(${situations.length})` : ''}
+              </button>
             </div>
           </div>
 
