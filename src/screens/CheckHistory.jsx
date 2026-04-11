@@ -22,6 +22,7 @@ function CheckHistory() {
   const [expandedEvents, setExpandedEvents] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [filterThoughts, setFilterThoughts] = useState(false);
 
   useEffect(() => {
     loadEvents();
@@ -85,6 +86,9 @@ function CheckHistory() {
     .filter(event =>
       event.event_description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.situation.title.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .filter(event =>
+      !filterThoughts || event.selected_back_thought || event.selected_forth_thought
     )
     .sort((a, b) => {
       switch (sortOrder) {
@@ -161,6 +165,17 @@ function CheckHistory() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+        <div className="form-group">
+          <label className="form-label">Filter</label>
+          <button
+            className={`btn ${filterThoughts ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ fontSize: '0.85em', padding: '6px 12px' }}
+            onClick={() => setFilterThoughts(f => !f)}
+          >
+            💭 With Thoughts Only {filterThoughts ? `(${filteredEvents.length})` : ''}
+          </button>
+        </div>
+
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label">Sort By</label>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
