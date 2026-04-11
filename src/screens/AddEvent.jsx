@@ -382,23 +382,14 @@ function AddEvent() {
             </div>
           </div>
 
-          {currentSituation && (currentSituation.back_thoughts?.length > 0 || currentSituation.forth_thoughts?.length > 0) && (
+          {currentSituation?.thought_pairs?.length > 0 && (
             <div className="form-group">
               <label className="form-label">💭 Common Thoughts in This Situation</label>
-              <div style={{ marginBottom: '4px', display: 'flex', gap: '16px', fontSize: '0.78rem', color: 'var(--text-muted, #888)' }}>
-                {currentSituation.back_thoughts?.length > 0 && <span>😈 Unhelpful</span>}
-                {currentSituation.forth_thoughts?.length > 0 && <span>😇 Helpful</span>}
-              </div>
-              {Array.from({
-                length: Math.max(
-                  currentSituation.back_thoughts?.length || 0,
-                  currentSituation.forth_thoughts?.length || 0
-                )
-              }, (_, i) => (
+              {currentSituation.thought_pairs.map((pair, i) => (
                 <ThoughtPair
                   key={i}
-                  backThought={currentSituation.back_thoughts?.[i]}
-                  forthThought={currentSituation.forth_thoughts?.[i]}
+                  backThought={pair.back}
+                  forthThought={pair.forth}
                 />
               ))}
             </div>

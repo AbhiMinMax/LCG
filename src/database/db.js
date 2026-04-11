@@ -41,16 +41,38 @@ export class LifeProgressDB extends Dexie {
       events: '++id, title, situation_id, event_description, choice_value, xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
       config: '++id, key, value'
     }).upgrade(tx => {
-      // Add default challenging_level and thought arrays to existing situations
       return tx.situations.toCollection().modify(situation => {
         if (situation.challenging_level === undefined) {
-          situation.challenging_level = 3; // Default medium challenging level
+          situation.challenging_level = 3;
         }
         if (!situation.back_thoughts) {
           situation.back_thoughts = [];
         }
         if (!situation.forth_thoughts) {
           situation.forth_thoughts = [];
+        }
+      });
+    });
+
+    // Version 4: Replace back_thoughts/forth_thoughts with thought_pairs [{back, forth}]
+    // Each entry is {back: string|null, forth: string|null}
+    // null means no thought on that side (solo thought)
+    this.version(4).stores({
+      situations: '++id, title, description, tags, challenging_level, created_at, updated_at',
+      opportunities: '++id, title, description, tags, current_xp, current_level, created_at, updated_at',
+      situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
+      events: '++id, title, situation_id, event_description, choice_value, xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
+      config: '++id, key, value'
+    }).upgrade(tx => {
+      return tx.situations.toCollection().modify(situation => {
+        if (!situation.thought_pairs) {
+          const back = situation.back_thoughts || [];
+          const forth = situation.forth_thoughts || [];
+          const len = Math.max(back.length, forth.length);
+          situation.thought_pairs = Array.from({ length: len }, (_, i) => ({
+            back: back[i] || null,
+            forth: forth[i] || null,
+          }));
         }
       });
     });
@@ -94,22 +116,28 @@ export const dbHelpers = {
   async fixLegacySituations() {
     try {
       const allSituations = await db.situations.toArray();
-      const situationsToUpdate = allSituations.filter(situation => 
-        situation.challenging_level === undefined || 
-        !situation.back_thoughts || 
-        !situation.forth_thoughts
+      const situationsToUpdate = allSituations.filter(situation =>
+        situation.challenging_level === undefined ||
+        !situation.thought_pairs
       );
 
       if (situationsToUpdate.length > 0) {
-        const updates = situationsToUpdate.map(situation => ({
-          key: situation.id,
-          changes: {
-            challenging_level: situation.challenging_level || 3, // Default medium
-            back_thoughts: situation.back_thoughts || [],
-            forth_thoughts: situation.forth_thoughts || [],
-            updated_at: new Date()
-          }
-        }));
+        const updates = situationsToUpdate.map(situation => {
+          const back = situation.back_thoughts || [];
+          const forth = situation.forth_thoughts || [];
+          const len = Math.max(back.length, forth.length);
+          return {
+            key: situation.id,
+            changes: {
+              challenging_level: situation.challenging_level || 3,
+              thought_pairs: situation.thought_pairs || Array.from({ length: len }, (_, i) => ({
+                back: back[i] || null,
+                forth: forth[i] || null,
+              })),
+              updated_at: new Date()
+            }
+          };
+        });
 
         await db.situations.bulkUpdate(updates);
         console.log(`Fixed ${situationsToUpdate.length} legacy situations with new fields`);
@@ -129,8 +157,10 @@ export const dbHelpers = {
         description: "A disagreement arose during an important team meeting",
         tags: ["work", "conflict", "team"],
         challenging_level: 4,
-        back_thoughts: ["Just stay quiet and avoid confrontation", "This will only make things worse and people will dislike me"],
-        forth_thoughts: ["Speaking up professionally shows leadership and integrity", "Constructive dialogue leads to better solutions for everyone"],
+        thought_pairs: [
+          { back: "Just stay quiet and avoid confrontation", forth: "Speaking up professionally shows leadership and integrity" },
+          { back: "This will only make things worse and people will dislike me", forth: "Constructive dialogue leads to better solutions for everyone" }
+        ],
         created_at: new Date(),
         updated_at: new Date()
       },
@@ -139,8 +169,10 @@ export const dbHelpers = {
         description: "Faced with a decision about diet, exercise, or wellness",
         tags: ["health", "wellness", "personal"],
         challenging_level: 3,
-        back_thoughts: ["It's too much work to change my habits now", "I don't have time for this and it won't make a difference anyway"],
-        forth_thoughts: ["Small consistent steps create lasting change over time", "Investing in my health now pays dividends for my entire future"],
+        thought_pairs: [
+          { back: "It's too much work to change my habits now", forth: "Small consistent steps create lasting change over time" },
+          { back: "I don't have time for this and it won't make a difference anyway", forth: "Investing in my health now pays dividends for my entire future" }
+        ],
         created_at: new Date(),
         updated_at: new Date()
       },
@@ -149,8 +181,10 @@ export const dbHelpers = {
         description: "A communication challenge with family, friend, or partner",
         tags: ["relationships", "communication", "personal"],
         challenging_level: 5,
-        back_thoughts: ["Avoiding this conversation will keep the peace", "They won't understand my perspective anyway, so why try"],
-        forth_thoughts: ["Honest communication, even when difficult, strengthens relationships", "I can express my perspective with empathy and create mutual understanding"],
+        thought_pairs: [
+          { back: "Avoiding this conversation will keep the peace", forth: "Honest communication, even when difficult, strengthens relationships" },
+          { back: "They won't understand my perspective anyway, so why try", forth: "I can express my perspective with empathy and create mutual understanding" }
+        ],
         created_at: new Date(),
         updated_at: new Date()
       },
@@ -159,8 +193,10 @@ export const dbHelpers = {
         description: "Encountered a chance to learn something new or challenging",
         tags: ["learning", "growth", "education"],
         challenging_level: 2,
-        back_thoughts: ["I'm not smart enough", "This is too complicated"],
-        forth_thoughts: ["Every expert was once a beginner", "Growth happens outside comfort zone"],
+        thought_pairs: [
+          { back: "I'm not smart enough", forth: "Every expert was once a beginner" },
+          { back: "This is too complicated", forth: "Growth happens outside comfort zone" }
+        ],
         created_at: new Date(),
         updated_at: new Date()
       },
@@ -169,8 +205,10 @@ export const dbHelpers = {
         description: "Had to make an important financial choice or investment",
         tags: ["finance", "money", "planning"],
         challenging_level: 4,
-        back_thoughts: ["Play it safe", "What if I lose money?"],
-        forth_thoughts: ["Calculated risks lead to growth", "Research and make informed decisions"],
+        thought_pairs: [
+          { back: "Play it safe", forth: "Calculated risks lead to growth" },
+          { back: "What if I lose money?", forth: "Research and make informed decisions" }
+        ],
         created_at: new Date(),
         updated_at: new Date()
       }
@@ -292,47 +330,55 @@ export const dbHelpers = {
               description: "An everyday situation that tests your character and decision-making",
               tags: ["daily", "general", "personal"],
               challenging_level: 3,
-              back_thoughts: ["This daily task isn't really important", "I can just deal with it later when I feel like it"],
-              forth_thoughts: ["Small daily actions build the foundation of strong character", "How I handle small challenges shapes how I'll handle big ones"],
+              thought_pairs: [
+                { back: "This daily task isn't really important", forth: "Small daily actions build the foundation of strong character" },
+                { back: "I can just deal with it later when I feel like it", forth: "How I handle small challenges shapes how I'll handle big ones" }
+              ],
               created_at: new Date(),
               updated_at: new Date()
             };
             break;
-            
+
           case "Social Interaction":
             situationData = {
               title,
               description: "Interactions with family, friends, colleagues, or strangers",
               tags: ["social", "relationships", "communication"],
               challenging_level: 3,
-              back_thoughts: ["I should avoid any awkwardness and keep this brief", "They probably don't want to talk to me anyway"],
-              forth_thoughts: ["Authentic connections create meaningful relationships", "Showing genuine interest in others enriches both our lives"],
+              thought_pairs: [
+                { back: "I should avoid any awkwardness and keep this brief", forth: "Authentic connections create meaningful relationships" },
+                { back: "They probably don't want to talk to me anyway", forth: "Showing genuine interest in others enriches both our lives" }
+              ],
               created_at: new Date(),
               updated_at: new Date()
             };
             break;
-            
+
           case "Learning Opportunity":
             situationData = {
               title,
               description: "Chances to acquire new knowledge, skills, or experiences",
               tags: ["learning", "growth", "education"],
               challenging_level: 2,
-              back_thoughts: ["I'm too busy", "I already know enough"],
-              forth_thoughts: ["Growth requires learning", "Knowledge is power"],
+              thought_pairs: [
+                { back: "I'm too busy", forth: "Growth requires learning" },
+                { back: "I already know enough", forth: "Knowledge is power" }
+              ],
               created_at: new Date(),
               updated_at: new Date()
             };
             break;
-            
+
           case "Health Decision":
             situationData = {
               title,
               description: "Choices related to physical and mental well-being",
               tags: ["health", "wellness", "self-care"],
               challenging_level: 3,
-              back_thoughts: ["One time won't hurt", "I'll start tomorrow"],
-              forth_thoughts: ["Health is wealth", "Consistency creates results"],
+              thought_pairs: [
+                { back: "One time won't hurt", forth: "Health is wealth" },
+                { back: "I'll start tomorrow", forth: "Consistency creates results" }
+              ],
               created_at: new Date(),
               updated_at: new Date()
             };
@@ -773,43 +819,45 @@ export const dbHelpers = {
   },
 
   // Create a new situation
-  async createSituation(title, description, tags = [], challengingLevel = 3, backThoughts = [], forthThoughts = []) {
+  // thoughtPairs: [{back: string|null, forth: string|null}] — null means no thought on that side
+  async createSituation(title, description, tags = [], challengingLevel = 3, thoughtPairs = []) {
     const situation = {
       title: title.trim(),
       description: description.trim(),
       tags: Array.isArray(tags) ? tags.filter(tag => tag.trim()) : [],
       challenging_level: Math.max(1, Math.min(5, parseInt(challengingLevel) || 3)),
-      back_thoughts: Array.isArray(backThoughts) ? backThoughts.filter(t => t.trim()) : [],
-      forth_thoughts: Array.isArray(forthThoughts) ? forthThoughts.filter(t => t.trim()) : [],
+      thought_pairs: Array.isArray(thoughtPairs)
+        ? thoughtPairs.filter(p => (p.back && p.back.trim()) || (p.forth && p.forth.trim()))
+            .map(p => ({ back: p.back?.trim() || null, forth: p.forth?.trim() || null }))
+        : [],
       created_at: new Date(),
       updated_at: new Date()
     };
-    
+
     const id = await db.situations.add(situation);
     return { ...situation, id };
   },
 
   // Update an existing situation
-  async updateSituation(id, title, description, tags = [], challengingLevel = null, backThoughts = null, forthThoughts = null) {
+  async updateSituation(id, title, description, tags = [], challengingLevel = null, thoughtPairs = null) {
     const updates = {
       title: title.trim(),
       description: description.trim(),
       tags: Array.isArray(tags) ? tags.filter(tag => tag.trim()) : [],
       updated_at: new Date()
     };
-    
+
     if (challengingLevel !== null) {
       updates.challenging_level = Math.max(1, Math.min(5, parseInt(challengingLevel) || 3));
     }
-    
-    if (backThoughts !== null) {
-      updates.back_thoughts = Array.isArray(backThoughts) ? backThoughts.filter(t => t.trim()) : [];
+
+    if (thoughtPairs !== null) {
+      updates.thought_pairs = Array.isArray(thoughtPairs)
+        ? thoughtPairs.filter(p => (p.back && p.back.trim()) || (p.forth && p.forth.trim()))
+            .map(p => ({ back: p.back?.trim() || null, forth: p.forth?.trim() || null }))
+        : [];
     }
-    
-    if (forthThoughts !== null) {
-      updates.forth_thoughts = Array.isArray(forthThoughts) ? forthThoughts.filter(t => t.trim()) : [];
-    }
-    
+
     await db.situations.update(id, updates);
     return await db.situations.get(id);
   },

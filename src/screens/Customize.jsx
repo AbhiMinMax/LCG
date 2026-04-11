@@ -49,8 +49,7 @@ function Customize() {
     tags: [],
     linkedOpportunities: [],
     challengingLevel: 3,
-    backThoughts: [],
-    forthThoughts: []
+    thoughtPairs: []   // [{back: string|null, forth: string|null}]
   });
   
   const [opportunityForm, setOpportunityForm] = useState({
@@ -93,8 +92,7 @@ function Customize() {
 
       if (filterSituationThoughts) {
         filtered = filtered.filter(situation =>
-          (situation.back_thoughts && situation.back_thoughts.length > 0) ||
-          (situation.forth_thoughts && situation.forth_thoughts.length > 0)
+          situation.thought_pairs && situation.thought_pairs.length > 0
         );
       }
 
@@ -202,8 +200,7 @@ function Customize() {
           situationForm.description,
           situationForm.tags,
           situationForm.challengingLevel,
-          situationForm.backThoughts,
-          situationForm.forthThoughts
+          situationForm.thoughtPairs
         );
         situationId = editingSituation.id;
       } else {
@@ -212,8 +209,7 @@ function Customize() {
           situationForm.description,
           situationForm.tags,
           situationForm.challengingLevel,
-          situationForm.backThoughts,
-          situationForm.forthThoughts
+          situationForm.thoughtPairs
         );
         situationId = newSituation.id;
       }
@@ -232,14 +228,24 @@ function Customize() {
 
   const handleEditSituation = (situation) => {
     setEditingSituation(situation);
+    // Support legacy back_thoughts/forth_thoughts for old DB records that haven't migrated yet
+    let thoughtPairs = situation.thought_pairs;
+    if (!thoughtPairs) {
+      const back = situation.back_thoughts || [];
+      const forth = situation.forth_thoughts || [];
+      const len = Math.max(back.length, forth.length);
+      thoughtPairs = Array.from({ length: len }, (_, i) => ({
+        back: back[i] || null,
+        forth: forth[i] || null,
+      }));
+    }
     setSituationForm({
       title: situation.title,
       description: situation.description,
       tags: situation.tags || [],
       linkedOpportunities: situation.opportunities.map(opp => opp.id),
       challengingLevel: situation.challenging_level || 3,
-      backThoughts: situation.back_thoughts || [],
-      forthThoughts: situation.forth_thoughts || []
+      thoughtPairs
     });
     setShowSituationForm(true);
   };
@@ -337,14 +343,13 @@ function Customize() {
 
   // Form reset handlers
   const resetSituationForm = () => {
-    setSituationForm({ 
-      title: '', 
-      description: '', 
-      tags: [], 
+    setSituationForm({
+      title: '',
+      description: '',
+      tags: [],
       linkedOpportunities: [],
       challengingLevel: 3,
-      backThoughts: [],
-      forthThoughts: []
+      thoughtPairs: []
     });
     setEditingSituation(null);
     setShowSituationForm(false);
@@ -689,156 +694,119 @@ function Customize() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label" style={{marginBottom: '8px'}}>💭 Internal Dialogue</label>
-                  <div style={{
-                    background: '#f8f9fa',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: '1px solid #e9ecef',
-                    marginBottom: '12px'
-                  }}>
-                    <p style={{
-                      fontSize: '0.9rem',
-                      color: '#6c757d',
-                      margin: '0 0 8px 0',
-                      lineHeight: '1.4'
-                    }}>
-                      Create pairs of negative thoughts (😈 back) and positive responses (😇 forth) that counter them. 
-                      This helps identify the internal dialogue patterns in this situation.
+                  <label className="form-label" style={{ marginBottom: '8px' }}>💭 Internal Dialogue</label>
+                  <div style={{ background: '#f8f9fa', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e9ecef', marginBottom: '12px' }}>
+                    <p style={{ fontSize: '0.85rem', color: '#6c757d', margin: 0, lineHeight: '1.4' }}>
+                      Add thought pairs (😈 back + 😇 forth) or standalone thoughts. Pairs are always shown together.
                     </p>
                   </div>
 
-                  {/* Paired thoughts or individual management */}
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))'}}>
-                      {/* Back Thoughts Column */}
-                      <div>
-                        <label className="form-label" style={{color: '#dc3545', fontSize: '0.95rem', marginBottom: '8px', display: 'block'}}>
-                          😈 Back Thoughts (Negative/Limiting)
-                        </label>
-                        {situationForm.backThoughts.map((thought, index) => (
-                          <div key={`back-${index}`} style={{ marginBottom: '12px' }}>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                              <textarea
-                                className="form-input"
-                                value={thought}
-                                onChange={(e) => {
-                                  const newThoughts = [...situationForm.backThoughts];
-                                  newThoughts[index] = e.target.value;
-                                  setSituationForm({ ...situationForm, backThoughts: newThoughts });
-                                }}
-                                placeholder="e.g., 'I'm not good enough for this challenge...'"
-                                rows="3"
-                                style={{ 
-                                  resize: 'vertical', 
-                                  minHeight: '75px',
-                                  borderColor: '#dc3545',
-                                  borderWidth: '1px'
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newBackThoughts = situationForm.backThoughts.filter((_, i) => i !== index);
-                                  const newForthThoughts = [...situationForm.forthThoughts];
-                                  // Also remove corresponding forth thought if it exists
-                                  if (newForthThoughts[index] !== undefined) {
-                                    newForthThoughts.splice(index, 1);
-                                  }
-                                  setSituationForm({ 
-                                    ...situationForm, 
-                                    backThoughts: newBackThoughts,
-                                    forthThoughts: newForthThoughts 
-                                  });
-                                }}
-                                style={{ padding: '4px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', marginTop: '4px', height: 'fit-content' }}
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                  {situationForm.thoughtPairs.map((pair, index) => {
+                    const isPair = pair.back !== null && pair.forth !== null;
+                    const isSoloBack = pair.back !== null && pair.forth === null;
+                    const isSoloForth = pair.back === null && pair.forth !== null;
 
-                      {/* Forth Thoughts Column */}
-                      <div>
-                        <label className="form-label" style={{color: '#007bff', fontSize: '0.95rem', marginBottom: '8px', display: 'block'}}>
-                          😇 Forth Thoughts (Positive Response)
-                        </label>
-                        {situationForm.forthThoughts.map((thought, index) => (
-                          <div key={`forth-${index}`} style={{ marginBottom: '12px' }}>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                              <textarea
-                                className="form-input"
-                                value={thought}
-                                onChange={(e) => {
-                                  const newThoughts = [...situationForm.forthThoughts];
-                                  newThoughts[index] = e.target.value;
-                                  setSituationForm({ ...situationForm, forthThoughts: newThoughts });
-                                }}
-                                placeholder="e.g., 'Growth happens outside my comfort zone, and I have what it takes to learn...'"
-                                rows="3"
-                                style={{ 
-                                  resize: 'vertical', 
-                                  minHeight: '75px',
-                                  borderColor: '#007bff',
-                                  borderWidth: '1px'
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newForthThoughts = situationForm.forthThoughts.filter((_, i) => i !== index);
-                                  setSituationForm({ ...situationForm, forthThoughts: newForthThoughts });
-                                }}
-                                style={{ padding: '4px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', marginTop: '4px', height: 'fit-content' }}
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Add pair button */}
-                    <div style={{display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '16px'}}>
-                      <button
-                        type="button"
-                        onClick={() => setSituationForm({ 
-                          ...situationForm, 
-                          backThoughts: [...situationForm.backThoughts, ''],
-                          forthThoughts: [...situationForm.forthThoughts, '']
-                        })}
-                        style={{ 
-                          padding: '8px 16px', 
-                          background: '#6c757d', 
-                          color: 'white', 
-                          border: 'none', 
-                          borderRadius: '6px', 
-                          fontSize: '0.9rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          border: isPair ? '1px solid #dee2e6' : `1px solid ${isSoloBack ? '#dc354540' : '#007bff40'}`,
+                          borderRadius: '8px',
+                          padding: '10px',
+                          marginBottom: '10px',
+                          background: isPair ? '#f8f9fa' : 'transparent',
                         }}
                       >
-                        💭 Add Thought Pair
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSituationForm({ ...situationForm, backThoughts: [...situationForm.backThoughts, ''] })}
-                        style={{ padding: '6px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.85rem' }}
-                      >
-                        + Back Only
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSituationForm({ ...situationForm, forthThoughts: [...situationForm.forthThoughts, ''] })}
-                        style={{ padding: '6px 12px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.85rem' }}
-                      >
-                        + Forth Only
-                      </button>
-                    </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#666' }}>
+                            {isPair ? '💭 Pair' : isSoloBack ? '😈 Back only' : '😇 Forth only'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSituationForm({
+                              ...situationForm,
+                              thoughtPairs: situationForm.thoughtPairs.filter((_, i) => i !== index)
+                            })}
+                            style={{ padding: '2px 7px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        {pair.back !== null && (
+                          <div style={{ marginBottom: isPair ? '8px' : 0 }}>
+                            <div style={{ fontSize: '0.75rem', color: '#dc3545', fontWeight: 600, marginBottom: '4px' }}>😈 Back</div>
+                            <textarea
+                              className="form-input"
+                              value={pair.back}
+                              onChange={(e) => {
+                                const updated = [...situationForm.thoughtPairs];
+                                updated[index] = { ...updated[index], back: e.target.value };
+                                setSituationForm({ ...situationForm, thoughtPairs: updated });
+                              }}
+                              placeholder="Negative/limiting thought..."
+                              rows="2"
+                              style={{ resize: 'vertical', minHeight: '60px', borderColor: '#dc3545', borderWidth: '1px' }}
+                            />
+                          </div>
+                        )}
+
+                        {isPair && (
+                          <div style={{ fontSize: '0.7rem', color: '#999', textAlign: 'center', margin: '2px 0 6px 0' }}>↓ countered by</div>
+                        )}
+
+                        {pair.forth !== null && (
+                          <div>
+                            <div style={{ fontSize: '0.75rem', color: '#007bff', fontWeight: 600, marginBottom: '4px' }}>😇 Forth</div>
+                            <textarea
+                              className="form-input"
+                              value={pair.forth}
+                              onChange={(e) => {
+                                const updated = [...situationForm.thoughtPairs];
+                                updated[index] = { ...updated[index], forth: e.target.value };
+                                setSituationForm({ ...situationForm, thoughtPairs: updated });
+                              }}
+                              placeholder="Positive response/reframe..."
+                              rows="2"
+                              style={{ resize: 'vertical', minHeight: '60px', borderColor: '#007bff', borderWidth: '1px' }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setSituationForm({
+                        ...situationForm,
+                        thoughtPairs: [...situationForm.thoughtPairs, { back: '', forth: '' }]
+                      })}
+                      style={{ padding: '7px 14px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer' }}
+                    >
+                      💭 Add Pair
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSituationForm({
+                        ...situationForm,
+                        thoughtPairs: [...situationForm.thoughtPairs, { back: '', forth: null }]
+                      })}
+                      style={{ padding: '7px 14px', background: '#c62828', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer' }}
+                    >
+                      😈 Back Only
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSituationForm({
+                        ...situationForm,
+                        thoughtPairs: [...situationForm.thoughtPairs, { back: null, forth: '' }]
+                      })}
+                      style={{ padding: '7px 14px', background: '#1565c0', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer' }}
+                    >
+                      😇 Forth Only
+                    </button>
                   </div>
                 </div>
 
@@ -930,21 +898,16 @@ function Customize() {
                   </div>
                 )}
                 
-                {((situation.back_thoughts?.length > 0) || (situation.forth_thoughts?.length > 0)) && (
+                {situation.thought_pairs?.length > 0 && (
                   <div style={{ marginBottom: '12px' }}>
                     <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted, #888)', marginBottom: '6px' }}>
                       💭 Thoughts
                     </div>
-                    {Array.from({
-                      length: Math.max(
-                        situation.back_thoughts?.length || 0,
-                        situation.forth_thoughts?.length || 0
-                      )
-                    }, (_, i) => (
+                    {situation.thought_pairs.map((pair, i) => (
                       <ThoughtPair
                         key={i}
-                        backThought={situation.back_thoughts?.[i]}
-                        forthThought={situation.forth_thoughts?.[i]}
+                        backThought={pair.back}
+                        forthThought={pair.forth}
                         defaultExpanded={false}
                       />
                     ))}
