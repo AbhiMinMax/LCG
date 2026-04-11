@@ -21,6 +21,7 @@ function CheckHistory() {
   const [loading, setLoading] = useState(true);
   const [expandedEvents, setExpandedEvents] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState('desc');
 
   useEffect(() => {
     loadEvents();
@@ -80,10 +81,15 @@ function CheckHistory() {
     return text.substring(0, maxLength) + '...';
   };
 
-  const filteredEvents = events.filter(event => 
-    event.event_description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.situation.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredEvents = events
+    .filter(event =>
+      event.event_description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.situation.title.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      const diff = new Date(a.timestamp) - new Date(b.timestamp);
+      return sortOrder === 'desc' ? -diff : diff;
+    });
 
   const getEventStats = () => {
     const totalEvents = events.length;
@@ -135,7 +141,7 @@ function CheckHistory() {
         </div>
       </div>
 
-      {/* Search */}
+      {/* Search and Sort */}
       <div className="card">
         <div className="form-group">
           <label htmlFor="search" className="form-label">Search Events</label>
@@ -147,6 +153,25 @@ function CheckHistory() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label">Sort by Date</label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className={`btn ${sortOrder === 'desc' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ flex: 1, fontSize: '0.9em' }}
+              onClick={() => setSortOrder('desc')}
+            >
+              Newest First
+            </button>
+            <button
+              className={`btn ${sortOrder === 'asc' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ flex: 1, fontSize: '0.9em' }}
+              onClick={() => setSortOrder('asc')}
+            >
+              Oldest First
+            </button>
+          </div>
         </div>
       </div>
 

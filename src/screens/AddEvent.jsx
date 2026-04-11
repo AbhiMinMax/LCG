@@ -25,6 +25,10 @@ function AddEvent() {
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastResult, setLastResult] = useState(null);
+  const [pastSuccesses, setPastSuccesses] = useState([]);
+  const [pastFailures, setPastFailures] = useState([]);
+  const [successesExpanded, setSuccessesExpanded] = useState(false);
+  const [failuresExpanded, setFailuresExpanded] = useState(false);
 
   useEffect(() => {
     loadSituations();
@@ -43,13 +47,19 @@ function AddEvent() {
   useEffect(() => {
     const loadSituationData = async () => {
       try {
-        const [opportunities, situation] = await Promise.all([
-          dbHelpers.getOpportunitiesForSituation(parseInt(selectedSituation)),
-          situations.find(s => s.id === parseInt(selectedSituation))
+        const sitId = parseInt(selectedSituation);
+        const [opportunities, successes, failures] = await Promise.all([
+          dbHelpers.getOpportunitiesForSituation(sitId),
+          dbHelpers.getEventsForSituation(sitId, [3, 4]),
+          dbHelpers.getEventsForSituation(sitId, [1, 2]),
         ]);
         setAffectedOpportunities(opportunities);
-        setCurrentSituation(situation);
-        
+        setCurrentSituation(situations.find(s => s.id === sitId));
+        setPastSuccesses(successes);
+        setPastFailures(failures);
+        setSuccessesExpanded(false);
+        setFailuresExpanded(false);
+
         // Reload dynamic XP config to ensure it's current
         await loadDynamicXpConfig();
       } catch (error) {
@@ -62,8 +72,10 @@ function AddEvent() {
     } else {
       setAffectedOpportunities([]);
       setCurrentSituation(null);
+      setPastSuccesses([]);
+      setPastFailures([]);
     }
-    
+
     // Reset thought selections when situation changes
     setSelectedBackThought('');
     setSelectedForthThought('');
@@ -152,8 +164,24 @@ function AddEvent() {
     setSelectedBackThought('');
     setSelectedForthThought('');
     setCurrentSituation(null);
+    setPastSuccesses([]);
+    setPastFailures([]);
+    setSuccessesExpanded(false);
+    setFailuresExpanded(false);
     setSearchQuery('');
     setFilteredSituations(situations);
+  };
+
+  const formatEventDate = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffDays = Math.floor((todayOnly - dateOnly) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    if (diffDays === 1) return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
   };
 
   const currentXp = useMemo(() => {
@@ -401,6 +429,141 @@ function AddEvent() {
                       <option key={index} value={thought}>{thought}</option>
                     ))}
                   </select>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Past Successes Collapsible */}
+          {selectedSituation && (
+            <div style={{ marginTop: '16px', border: '1px solid #28a74533', borderRadius: '8px', overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => setSuccessesExpanded(e => !e)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  background: '#28a74511',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.95em',
+                  color: '#28a745',
+                  textAlign: 'left'
+                }}
+              >
+                <span>Past Successes ({pastSuccesses.length})</span>
+                <span>{successesExpanded ? '▼' : '▶'}</span>
+              </button>
+              {successesExpanded && (
+                <div style={{ padding: '12px 16px' }}>
+                  {pastSuccesses.length === 0 ? (
+                    <p style={{ color: '#666', fontSize: '0.9em', margin: 0 }}>No past successes for this situation yet.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {pastSuccesses.map(event => (
+                        <div key={event.id} style={{ borderLeft: '3px solid #28a745', paddingLeft: '12px', fontSize: '0.9em' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <strong style={{ color: event.choice_value === 4 ? '#007bff' : '#28a745' }}>
+                              {event.title}
+                            </strong>
+                            <span style={{ color: '#28a745', fontWeight: 600 }}>+{event.xp_change} XP</span>
+                          </div>
+                          <div style={{ color: '#666', marginBottom: '4px' }}>{formatEventDate(event.timestamp)}</div>
+                          <p style={{ margin: '4px 0', color: '#333' }}>{event.event_description}</p>
+                          {event.selected_back_thought && (
+                            <div style={{ fontSize: '0.85em', color: '#dc3545', marginTop: '4px' }}>
+                              Back thought: {event.selected_back_thought}
+                            </div>
+                          )}
+                          {event.selected_forth_thought && (
+                            <div style={{ fontSize: '0.85em', color: '#007bff', marginTop: '2px' }}>
+                              Forth thought: {event.selected_forth_thought}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Past Failures Collapsible */}
+          {selectedSituation && (
+            <div style={{ marginTop: '12px', border: '1px solid #dc354533', borderRadius: '8px', overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => setFailuresExpanded(e => !e)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  background: '#dc354511',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.95em',
+                  color: '#dc3545',
+                  textAlign: 'left'
+                }}
+              >
+                <span>
+                  Past Failures ({pastFailures.length})
+                  {pastFailures.length >= 2 && (
+                    <span style={{ marginLeft: '8px', fontSize: '0.85em', fontWeight: 400 }}>
+                      — {pastFailures.length}-event pattern
+                    </span>
+                  )}
+                </span>
+                <span>{failuresExpanded ? '▼' : '▶'}</span>
+              </button>
+              {failuresExpanded && (
+                <div style={{ padding: '12px 16px' }}>
+                  {pastFailures.length === 0 ? (
+                    <p style={{ color: '#666', fontSize: '0.9em', margin: 0 }}>No past failures for this situation.</p>
+                  ) : (
+                    <>
+                      {affectedOpportunities.length > 0 && pastFailures.length >= 2 && (
+                        <div style={{
+                          background: '#fff3cd',
+                          border: '1px solid #ffc107',
+                          borderRadius: '6px',
+                          padding: '10px 12px',
+                          marginBottom: '12px',
+                          fontSize: '0.88em',
+                          color: '#856404'
+                        }}>
+                          You've failed here {pastFailures.length} time{pastFailures.length !== 1 ? 's' : ''}. Each failure costs XP across {affectedOpportunities.length} linked opportunit{affectedOpportunities.length !== 1 ? 'ies' : 'y'}: {affectedOpportunities.map(o => o.title).join(', ')}.
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {pastFailures.map(event => (
+                          <div key={event.id} style={{ borderLeft: '3px solid #dc3545', paddingLeft: '12px', fontSize: '0.9em' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <strong style={{ color: event.choice_value === 1 ? '#dc3545' : '#fd7e14' }}>
+                                {event.title}
+                              </strong>
+                              <span style={{ color: '#dc3545', fontWeight: 600 }}>{event.xp_change} XP</span>
+                            </div>
+                            <div style={{ color: '#666', marginBottom: '4px' }}>{formatEventDate(event.timestamp)}</div>
+                            <p style={{ margin: '4px 0', color: '#333' }}>{event.event_description}</p>
+                            {event.selected_back_thought && (
+                              <div style={{ fontSize: '0.85em', color: '#dc3545', marginTop: '4px' }}>
+                                Back thought: {event.selected_back_thought}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

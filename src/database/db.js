@@ -688,6 +688,20 @@ export const dbHelpers = {
     return result;
   },
 
+  // Get past events for a specific situation, optionally filtered by choice values
+  async getEventsForSituation(situationId, choiceValues = null) {
+    let collection = db.events.where('situation_id').equals(situationId);
+    let events = await collection.toArray();
+
+    if (choiceValues && choiceValues.length > 0) {
+      events = events.filter(e => choiceValues.includes(e.choice_value));
+    }
+
+    // Sort by timestamp descending
+    events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    return events;
+  },
+
   // Get all opportunities sorted by different criteria
   async getOpportunitiesSorted(sortBy = 'alphabetical') {
     let opportunities = await db.opportunities.toArray();
