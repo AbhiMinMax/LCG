@@ -17,8 +17,6 @@ function AddEvent() {
   const [eventDescription, setEventDescription] = useState('');
   const [selectedChoice, setSelectedChoice] = useState('');
   const [affectedOpportunities, setAffectedOpportunities] = useState([]);
-  const [selectedBackThought, setSelectedBackThought] = useState('');
-  const [selectedForthThought, setSelectedForthThought] = useState('');
   const [currentSituation, setCurrentSituation] = useState(null);
   const [dynamicXpEnabled, setDynamicXpEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -75,10 +73,6 @@ function AddEvent() {
       setPastSuccesses([]);
       setPastFailures([]);
     }
-
-    // Reset thought selections when situation changes
-    setSelectedBackThought('');
-    setSelectedForthThought('');
   }, [selectedSituation, situations]);
 
   const loadSituations = async () => {
@@ -126,9 +120,7 @@ function AddEvent() {
         parseInt(selectedSituation),
         eventDescription.trim(),
         parseInt(selectedChoice),
-        eventTitle.trim() || null,
-        selectedBackThought || null,
-        selectedForthThought || null
+        eventTitle.trim() || null
       );
 
       setLastResult(result);
@@ -140,10 +132,8 @@ function AddEvent() {
       setEventDescription('');
       setSelectedChoice('');
       setAffectedOpportunities([]);
-      setSelectedBackThought('');
-      setSelectedForthThought('');
       setCurrentSituation(null);
-      
+
       // Hide success message after 3 seconds
       setTimeout(() => setShowSuccess(false), 3000);
       
@@ -161,8 +151,6 @@ function AddEvent() {
     setEventDescription('');
     setSelectedChoice('');
     setAffectedOpportunities([]);
-    setSelectedBackThought('');
-    setSelectedForthThought('');
     setCurrentSituation(null);
     setPastSuccesses([]);
     setPastFailures([]);
@@ -392,43 +380,25 @@ function AddEvent() {
 
           {currentSituation && (currentSituation.back_thoughts?.length > 0 || currentSituation.forth_thoughts?.length > 0) && (
             <div className="form-group">
-              <label className="form-label">💭 Thoughts During This Event (Optional)</label>
-              
+              <label className="form-label">💭 Common Thoughts in This Situation</label>
               {currentSituation.back_thoughts?.length > 0 && (
-                <div style={{marginBottom: '16px'}}>
-                  <label htmlFor="backThought" className="form-label" style={{fontSize: '0.9rem', color: '#dc3545'}}>
-                    😈 Back Thought (what held you back?)
-                  </label>
-                  <select
-                    id="backThought"
-                    className="form-select"
-                    value={selectedBackThought}
-                    onChange={(e) => setSelectedBackThought(e.target.value)}
-                  >
-                    <option value="">No specific back thought...</option>
+                <div style={{ marginBottom: '10px' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#dc3545', fontWeight: 600, marginBottom: '4px' }}>😈 Unhelpful thoughts</div>
+                  <ul style={{ margin: 0, paddingLeft: '18px', color: '#555', fontSize: '0.9em' }}>
                     {currentSituation.back_thoughts.map((thought, index) => (
-                      <option key={index} value={thought}>{thought}</option>
+                      <li key={index} style={{ marginBottom: '2px' }}>{thought}</li>
                     ))}
-                  </select>
+                  </ul>
                 </div>
               )}
-
               {currentSituation.forth_thoughts?.length > 0 && (
                 <div>
-                  <label htmlFor="forthThought" className="form-label" style={{fontSize: '0.9rem', color: '#007bff'}}>
-                    😇 Forth Thought (what encouraged you?)
-                  </label>
-                  <select
-                    id="forthThought"
-                    className="form-select"
-                    value={selectedForthThought}
-                    onChange={(e) => setSelectedForthThought(e.target.value)}
-                  >
-                    <option value="">No specific forth thought...</option>
+                  <div style={{ fontSize: '0.85rem', color: '#007bff', fontWeight: 600, marginBottom: '4px' }}>😇 Helpful thoughts</div>
+                  <ul style={{ margin: 0, paddingLeft: '18px', color: '#555', fontSize: '0.9em' }}>
                     {currentSituation.forth_thoughts.map((thought, index) => (
-                      <option key={index} value={thought}>{thought}</option>
+                      <li key={index} style={{ marginBottom: '2px' }}>{thought}</li>
                     ))}
-                  </select>
+                  </ul>
                 </div>
               )}
             </div>
