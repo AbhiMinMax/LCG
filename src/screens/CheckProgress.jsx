@@ -299,6 +299,9 @@ function GameProgress() {
   useEffect(() => {
     (async () => {
       try {
+        // Backfill game_xp for any events logged before game mode was enabled
+        await dbHelpers.backfillGameXp();
+
         const [opportunities, events, situations] = await Promise.all([
           db.opportunities.toArray(),
           db.events.toArray(),

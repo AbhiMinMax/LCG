@@ -265,7 +265,7 @@ function Customize() {
     }
     setSituationForm({
       title: situation.title,
-      description: situation.description,
+      description: situation.description || '',
       tags: situation.tags || [],
       linkedOpportunities: situation.opportunities.map(opp => opp.id),
       challengingLevel: situation.challenging_level || 3,
@@ -342,7 +342,7 @@ function Customize() {
     setEditingOpportunity(opportunity);
     setOpportunityForm({
       title: opportunity.title,
-      description: opportunity.description,
+      description: opportunity.description || '',
       tags: opportunity.tags || [],
       initialLevel: opportunity.current_level || 1,
       path: opportunity.path || 'default'
@@ -519,6 +519,10 @@ function Customize() {
     try {
       const newValue = !gameModeEnabled;
       await dbHelpers.setConfig('gameModeEnabled', newValue);
+      if (newValue) {
+        // Backfill game_xp for events logged before game mode was enabled
+        await dbHelpers.backfillGameXp();
+      }
       setGameModeEnabled(newValue);
     } catch (error) {
       console.error('Error updating config:', error);
@@ -993,7 +997,7 @@ function Customize() {
                   </div>
                 </div>
                 
-                <p className="item-description">{situation.description}</p>
+                {situation.description ? <p className="item-description">{situation.description}</p> : null}
                 
                 {situation.tags && situation.tags.length > 0 && (
                   <div style={{marginBottom: '12px'}}>
@@ -1335,7 +1339,7 @@ function Customize() {
                   </div>
                 </div>
                 
-                <p className="item-description">{opportunity.description}</p>
+                {opportunity.description ? <p className="item-description">{opportunity.description}</p> : null}
                 
                 {opportunity.tags && opportunity.tags.length > 0 && (
                   <div style={{marginBottom: '12px'}}>

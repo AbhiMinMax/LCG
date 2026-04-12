@@ -986,6 +986,62 @@ export const dbHelpers = {
     return { ...opportunity, id };
   },
 
+  // Retroactively compute and store game_xp for events logged before game mode was enabled.
+  // Only processes events where game_xp_change is null/undefined (pre-game-mode events).
+  // Safe to call multiple times — skips events already processed.
+  async backfillGameXp() {
+    try {
+      const [events, situations, opportunities] = await Promise.all([
+        db.events.toArray(),
+        db.situations.toArray(),
+        db.opportunities.toArray(),
+      ]);
+
+      const sitMap = Object.fromEntries(situations.map(s => [s.id, s]));
+
+      const unprocessed = events.filter(e => e.game_xp_change === null || e.game_xp_change === undefined);
+      if (unprocessed.length === 0) return;
+
+      const oppDelta = {};
+      const eventUpdates = [];
+
+      for (const ev of unprocessed) {
+        const sit = sitMap[ev.situation_id];
+        const isMeta = sit ? (sit.isMeta === true) : false;
+        const gxp = this.calculateGameXpChange(ev.choice_value, isMeta);
+        eventUpdates.push({ key: ev.id, changes: { game_xp_change: gxp } });
+        if (Array.isArray(ev.affected_opportunities)) {
+          for (const oppId of ev.affected_opportunities) {
+            oppDelta[oppId] = (oppDelta[oppId] || 0) + gxp;
+          }
+        }
+      }
+
+      await db.events.bulkUpdate(eventUpdates);
+
+      const oppUpdates = [];
+      for (const opp of opportunities) {
+        const delta = oppDelta[opp.id] || 0;
+        if (delta !== 0) {
+          const newGameXp = Math.max(0, (opp.game_xp || 0) + delta);
+          const changes = { game_xp: newGameXp };
+          if (!opp.path_locked && newGameXp >= PATH_LOCK_THRESHOLD) {
+            changes.path_locked = true;
+          }
+          oppUpdates.push({ key: opp.id, changes });
+        }
+      }
+
+      if (oppUpdates.length > 0) {
+        await db.opportunities.bulkUpdate(oppUpdates);
+      }
+
+      console.log(`[backfillGameXp] processed ${unprocessed.length} events, updated ${oppUpdates.length} opportunities`);
+    } catch (error) {
+      console.error('[backfillGameXp] error:', error);
+    }
+  },
+
   // Update path for an opportunity (only if not locked)
   async updateOpportunityPath(id, path) {
     const opp = await db.opportunities.get(id);
