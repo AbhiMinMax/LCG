@@ -23,6 +23,67 @@ const GM = {
   bar:     'rgba(255,255,255,0.10)',
 };
 
+// ─── Per-opportunity streak computation ──────────────────────────────────────
+// Returns { attemptStreak, masteryStreak, failureRun, recoveryStreak, recoveryBest }
+function computeOppStreaks(oppId, sortedEvents /* newest first */) {
+  const evs = sortedEvents.filter(
+    e => Array.isArray(e.affected_opportunities) && e.affected_opportunities.includes(oppId)
+  );
+
+  const isSuccess = v => v === 3 || v === 4;
+  const isFailure = v => v === 1 || v === 2;
+
+  // Attempt streak: consecutive success newest → oldest
+  let attemptStreak = 0;
+  for (const ev of evs) {
+    if (isSuccess(ev.choice_value)) attemptStreak++;
+    else break;
+  }
+
+  // Mastery streak: consecutive well_done (4) newest → oldest
+  let masteryStreak = 0;
+  for (const ev of evs) {
+    if (ev.choice_value === 4) masteryStreak++;
+    else break;
+  }
+
+  // Failure run: consecutive failure newest → oldest
+  let failureRun = 0;
+  for (const ev of evs) {
+    if (isFailure(ev.choice_value)) failureRun++;
+    else break;
+  }
+
+  // Recovery streak: after most recent failure, count consecutive successes
+  // Also compute personal best recovery streak across all history
+  let recoveryStreak = 0;
+  let recoveryBest = 0;
+
+  // Find index of most recent failure
+  const firstFailIdx = evs.findIndex(e => isFailure(e.choice_value));
+  if (firstFailIdx > 0) {
+    // There are successes before the failure (newest first) → those are the current recovery
+    recoveryStreak = firstFailIdx; // count of successes before first failure
+  }
+
+  // Compute all recovery runs for personal best
+  let currentRun = 0;
+  let inRecovery = false;
+  for (let i = evs.length - 1; i >= 0; i--) {
+    const cv = evs[i].choice_value;
+    if (isFailure(cv)) {
+      if (inRecovery && currentRun > recoveryBest) recoveryBest = currentRun;
+      currentRun = 0;
+      inRecovery = true;
+    } else if (inRecovery) {
+      currentRun++;
+    }
+  }
+  if (inRecovery && currentRun > recoveryBest) recoveryBest = currentRun;
+
+  return { attemptStreak, masteryStreak, failureRun, recoveryStreak, recoveryBest };
+}
+
 // ─── Compute all game-mode stats from raw DB rows ─────────────────────────────
 function computeGameStats(opportunities, events, situations) {
   const sitMap = Object.fromEntries(situations.map(s => [s.id, s]));
@@ -71,6 +132,12 @@ function computeGameStats(opportunities, events, situations) {
     else break;
   }
 
+  // Per-opportunity streaks
+  const oppStreaks = {};
+  for (const opp of opportunities) {
+    oppStreaks[opp.id] = computeOppStreaks(opp.id, sorted);
+  }
+
   // Sort opportunities: most recently active first
   const lastActive = {};
   for (const ev of events) {
@@ -95,7 +162,7 @@ function computeGameStats(opportunities, events, situations) {
       levelInfo: getPathLevel(o.game_xp || 0, o.path || 'default'),
     }));
 
-  return { depthXP, archetype, top3, breadth: breadthSet.size, realStreak, badges, sortedOpps };
+  return { depthXP, archetype, top3, breadth: breadthSet.size, realStreak, badges, sortedOpps, oppStreaks };
 }
 
 // ─── Character header ─────────────────────────────────────────────────────────
@@ -185,7 +252,7 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, realStreak, top3
 }
 
 // ─── Opportunity card (game mode) ─────────────────────────────────────────────
-function GameOppCard({ opp, expanded, onToggle }) {
+function GameOppCard({ opp, expanded, onToggle, streaks }) {
   const pathKey  = opp.path || 'default';
   const pathInfo = PATHS[pathKey];
   const lvInfo   = getPathLevel(opp.game_xp || 0, pathKey);
@@ -193,6 +260,7 @@ function GameOppCard({ opp, expanded, onToggle }) {
     ? Math.round((lvInfo.xpIntoLevel / lvInfo.xpForLevel) * 100)
     : 100;
   const barColor = lvInfo.isPrestige ? GM.gold : GM.accent;
+  const { attemptStreak = 0, masteryStreak = 0, failureRun = 0, recoveryStreak = 0, recoveryBest = 0 } = streaks || {};
 
   return (
     <div
@@ -240,19 +308,28 @@ function GameOppCard({ opp, expanded, onToggle }) {
         <div style={{ height: 2, background: GM.bar, borderRadius: 1, overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${barPct}%`, background: barColor, borderRadius: 1 }} />
         </div>
-        <div style={{
-          marginTop: 4,
-          fontSize: '0.7rem',
-          color: GM.textDim,
-          display: 'flex',
-          justifyContent: 'space-between',
-        }}>
+        <div style={{ marginTop: 4, fontSize: '0.7rem', color: GM.textDim, display: 'flex', justifyContent: 'space-between' }}>
           <span>{lvInfo.xpIntoLevel} / {lvInfo.xpForLevel} XP</span>
           {!lvInfo.isPrestige && lvInfo.nextLabel && (
             <span style={{ opacity: 0.7 }}>→ {lvInfo.nextLabel}</span>
           )}
         </div>
       </div>
+
+      {/* Streak indicators (collapsed view) */}
+      {(attemptStreak > 0 || failureRun > 0 || (masteryStreak >= 3)) && (
+        <div style={{ marginTop: 8, display: 'flex', gap: 12, fontSize: '0.72rem', flexWrap: 'wrap' }}>
+          {attemptStreak > 0 && (
+            <span style={{ color: GM.accent }}>↑ Attempt: {attemptStreak}</span>
+          )}
+          {masteryStreak >= 3 && (
+            <span style={{ color: GM.gold }}>★ Mastery: {masteryStreak}</span>
+          )}
+          {failureRun > 0 && (
+            <span style={{ color: GM.accentAlt ?? '#c8a84b', opacity: 0.85 }}>↓ Run: {failureRun}</span>
+          )}
+        </div>
+      )}
 
       {/* Expanded details */}
       {expanded && (
@@ -276,6 +353,30 @@ function GameOppCard({ opp, expanded, onToggle }) {
               {lvInfo.xpToNext}
             </div>
           )}
+
+          {/* Full streak details */}
+          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4, borderTop: `1px solid ${GM.border}`, paddingTop: 8 }}>
+            <div style={{ fontSize: '0.72rem', color: GM.textDim, marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Streaks</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>↑ Attempt streak</span>
+              <span style={{ color: attemptStreak > 0 ? GM.accent : GM.textDim }}>{attemptStreak}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>★ Mastery streak</span>
+              <span style={{ color: masteryStreak >= 3 ? GM.gold : GM.textDim }}>{masteryStreak >= 3 ? masteryStreak : '—'}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>↺ Recovery best</span>
+              <span style={{ color: recoveryBest > 0 ? GM.text : GM.textDim }}>{recoveryBest > 0 ? recoveryBest : '—'}</span>
+            </div>
+            {failureRun > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Failure run</span>
+                <span style={{ color: GM.gold }}>{failureRun}</span>
+              </div>
+            )}
+          </div>
+
           <div style={{ marginTop: 4 }}>
             <div style={{ color: GM.text, fontWeight: 500, marginBottom: 3 }}>{pathInfo.name} path</div>
             <div>{pathInfo.philosophy}</div>
@@ -324,7 +425,7 @@ function GameProgress() {
     );
   }
 
-  const { depthXP, archetype, top3, breadth, realStreak, badges, sortedOpps } = stats;
+  const { depthXP, archetype, top3, breadth, realStreak, badges, sortedOpps, oppStreaks } = stats;
 
   return (
     <div style={{ background: GM.bg, minHeight: '100vh', padding: '16px 16px 80px', boxSizing: 'border-box' }}>
@@ -349,6 +450,7 @@ function GameProgress() {
             opp={opp}
             expanded={expandedOpp === opp.id}
             onToggle={() => setExpandedOpp(id => id === opp.id ? null : opp.id)}
+            streaks={oppStreaks[opp.id]}
           />
         ))}
         {sortedOpps.length === 0 && (
