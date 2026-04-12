@@ -127,11 +127,11 @@ export function ThoughtPair({ backThought, forthThought, defaultExpanded }) {
             paddingLeft: '6px',
           }}
         >
-          <div style={{ width: '20px', height: '1px', background: 'rgba(100,100,100,0.25)' }} />
-          <span style={{ fontSize: '0.7rem', color: 'rgba(100,100,100,0.5)', userSelect: 'none' }}>
+          <div style={{ width: '20px', height: '1px', background: 'var(--border-color)' }} />
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', userSelect: 'none' }}>
             countered by
           </span>
-          <div style={{ flex: 1, height: '1px', background: 'rgba(100,100,100,0.25)' }} />
+          <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }} />
         </div>
       )}
 

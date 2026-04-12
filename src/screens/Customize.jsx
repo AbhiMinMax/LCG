@@ -847,7 +847,7 @@ function Customize() {
                         )}
 
                         {isPair && (
-                          <div style={{ fontSize: '0.7rem', color: '#999', textAlign: 'center', margin: '2px 0 6px 0' }}>↓ countered by</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', margin: '2px 0 6px 0' }}>↓ countered by</div>
                         )}
 
                         {pair.forth !== null && (
