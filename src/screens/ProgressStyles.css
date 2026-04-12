@@ -133,12 +133,12 @@
 .detail-section h4 {
   margin: 0 0 10px 0;
   font-size: 1rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .detail-section p {
   margin: 0;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
@@ -153,7 +153,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .detail-item:last-child {
@@ -162,23 +162,23 @@
 
 .detail-label {
   font-weight: 500;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .detail-value {
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .empty-state {
   text-align: center;
   padding: 40px 20px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .empty-state h3 {
   margin-bottom: 10px;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .success-card {
@@ -264,13 +264,13 @@
 
 .event-time {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .event-situation {
   font-size: 1rem;
-  color: #333;
+  color: var(--text-primary);
   font-weight: 600;
   margin-top: 2px;
 }
@@ -302,7 +302,7 @@
 
 .event-preview p {
   margin: 0 0 10px 0;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
@@ -323,7 +323,7 @@
 
 .affected-opportunities {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .opportunities-count {
@@ -389,14 +389,14 @@
 }
 
 .form-card {
-  background: #f8f9fa;
-  border: 2px solid #e0e0e0;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
   margin-bottom: 20px;
 }
 
 .form-card h4 {
   margin: 0 0 20px 0;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .opportunities-checklist {
@@ -405,10 +405,10 @@
   gap: 8px;
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 10px;
-  background: white;
+  background: var(--bg-secondary);
 }
 
 .checkbox-item {
@@ -419,10 +419,11 @@
   padding: 6px;
   border-radius: 4px;
   transition: background 0.2s ease;
+  color: var(--text-primary);
 }
 
 .checkbox-item:hover {
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
 }
 
 .checkbox-item input[type="checkbox"] {
@@ -457,7 +458,7 @@
 
 .item-title-section h4 {
   margin: 0 0 5px 0;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .opportunity-stats {
@@ -487,19 +488,19 @@
 
 .item-description {
   margin: 0 0 15px 0;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
 .item-meta {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
   padding-top: 15px;
 }
 
 .linked-opportunities strong {
   display: block;
   margin-bottom: 8px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .opportunity-tags {
@@ -518,7 +519,7 @@
 }
 
 .no-links {
-  color: #999;
+  color: var(--text-muted);
   font-style: italic;
   font-size: 0.9rem;
 }

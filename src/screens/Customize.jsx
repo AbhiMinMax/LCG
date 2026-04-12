@@ -652,8 +652,8 @@ function Customize() {
                       padding: '6px 12px',
                       border: selectedSituationTags.includes(tag) ? '2px solid #28a745' : '1px solid #ccc',
                       borderRadius: '16px',
-                      background: selectedSituationTags.includes(tag) ? '#d4edda' : '#f5f5f5',
-                      color: selectedSituationTags.includes(tag) ? '#155724' : '#666',
+                      background: selectedSituationTags.includes(tag) ? 'rgba(40,167,69,0.15)' : 'var(--bg-tertiary)',
+                      color: selectedSituationTags.includes(tag) ? 'var(--success)' : 'var(--text-secondary)',
                       cursor: 'pointer',
                       fontSize: '0.85rem',
                       fontWeight: selectedSituationTags.includes(tag) ? 'bold' : 'normal'
@@ -671,15 +671,15 @@ function Customize() {
                       padding: '4px 8px',
                       border: '1px solid #dc3545',
                       borderRadius: '12px',
-                      background: '#f8d7da',
-                      color: '#721c24',
+                      background: 'rgba(220,53,69,0.15)',
+                      color: 'var(--danger)',
                       cursor: 'pointer',
                       fontSize: '0.8rem'
                     }}
                   >
                     Clear Filters
                   </button>
-                  <span style={{marginLeft: '12px', fontSize: '0.9rem', color: '#666'}}>
+                  <span style={{marginLeft: '12px', fontSize: '0.9rem', color: 'var(--text-secondary)'}}>
                     Showing {situations.length} of {allSituations.length} situations
                   </span>
                 </div>
@@ -754,8 +754,8 @@ function Customize() {
                         padding: '10px',
                         border: !situationForm.isMeta ? '2px solid #28a745' : '1px solid #ccc',
                         borderRadius: '8px',
-                        background: !situationForm.isMeta ? '#d4edda' : 'var(--bg-secondary, #f5f5f5)',
-                        color: !situationForm.isMeta ? '#155724' : 'var(--text-primary, #333)',
+                        background: !situationForm.isMeta ? 'rgba(40,167,69,0.15)' : 'var(--bg-secondary)',
+                        color: !situationForm.isMeta ? 'var(--success)' : 'var(--text-primary)',
                         cursor: 'pointer',
                         textAlign: 'center',
                         fontWeight: !situationForm.isMeta ? 600 : 400
@@ -772,8 +772,8 @@ function Customize() {
                         padding: '10px',
                         border: situationForm.isMeta ? '2px solid #6c757d' : '1px solid #ccc',
                         borderRadius: '8px',
-                        background: situationForm.isMeta ? '#e2e3e5' : 'var(--bg-secondary, #f5f5f5)',
-                        color: situationForm.isMeta ? '#383d41' : 'var(--text-primary, #333)',
+                        background: situationForm.isMeta ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
+                        color: situationForm.isMeta ? 'var(--text-primary)' : 'var(--text-primary)',
                         cursor: 'pointer',
                         textAlign: 'center',
                         fontWeight: situationForm.isMeta ? 600 : 400
@@ -790,7 +790,7 @@ function Customize() {
 
                 <div className="form-group">
                   <label className="form-label" style={{ marginBottom: '8px' }}>💭 Internal Dialogue</label>
-                  <div style={{ background: '#f8f9fa', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e9ecef', marginBottom: '12px' }}>
+                  <div style={{ background: 'var(--bg-tertiary)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '12px' }}>
                     <p style={{ fontSize: '0.85rem', color: '#6c757d', margin: 0, lineHeight: '1.4' }}>
                       Add thought pairs (😈 back + 😇 forth) or standalone thoughts. Pairs are always shown together.
                     </p>
@@ -809,11 +809,11 @@ function Customize() {
                           borderRadius: '8px',
                           padding: '10px',
                           marginBottom: '10px',
-                          background: isPair ? '#f8f9fa' : 'transparent',
+                          background: isPair ? 'var(--bg-tertiary)' : 'transparent',
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#666' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                             {isPair ? '💭 Pair' : isSoloBack ? '😈 Back only' : '😇 Forth only'}
                           </span>
                           <button
@@ -898,7 +898,7 @@ function Customize() {
                         ...situationForm,
                         thoughtPairs: [...situationForm.thoughtPairs, { back: null, forth: '' }]
                       })}
-                      style={{ padding: '7px 14px', background: '#1565c0', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer' }}
+                      style={{ padding: '7px 14px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer' }}
                     >
                       😇 Forth Only
                     </button>
@@ -942,8 +942,8 @@ function Customize() {
                     <h4>{situation.title}</h4>
                     <div className="situation-stats" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{
-                        background: situation.isMeta ? '#e2e3e5' : '#d4edda',
-                        color: situation.isMeta ? '#383d41' : '#155724',
+                        background: situation.isMeta ? 'var(--bg-tertiary)' : 'rgba(40,167,69,0.15)',
+                        color: situation.isMeta ? 'var(--text-secondary)' : 'var(--success)',
                         padding: '2px 8px',
                         borderRadius: '12px',
                         fontSize: '0.75rem',
@@ -963,8 +963,8 @@ function Customize() {
                       </span>
                       {(eventCountsPerSit[situation.id] || 0) > 0 && (
                         <span style={{
-                          background: '#e8f5e9',
-                          color: '#2e7d32',
+                          background: 'rgba(40,167,69,0.15)',
+                          color: 'var(--success)',
                           padding: '2px 8px',
                           borderRadius: '12px',
                           fontSize: '0.75rem',
@@ -1002,8 +1002,8 @@ function Customize() {
                       {situation.tags.map(tag => (
                         <span key={tag} style={{
                           display: 'inline-block',
-                          background: '#e8f5e8',
-                          color: '#2e7d2e',
+                          background: 'rgba(40,167,69,0.15)',
+                          color: 'var(--success)',
                           padding: '2px 8px',
                           borderRadius: '12px',
                           fontSize: '0.75rem'
@@ -1106,8 +1106,8 @@ function Customize() {
                       padding: '6px 12px',
                       border: selectedOpportunityTags.includes(tag) ? '2px solid #1976d2' : '1px solid #ccc',
                       borderRadius: '16px',
-                      background: selectedOpportunityTags.includes(tag) ? '#e3f2fd' : '#f5f5f5',
-                      color: selectedOpportunityTags.includes(tag) ? '#1976d2' : '#666',
+                      background: selectedOpportunityTags.includes(tag) ? 'rgba(25,118,210,0.15)' : 'var(--bg-tertiary)',
+                      color: selectedOpportunityTags.includes(tag) ? '#2196f3' : 'var(--text-secondary)',
                       cursor: 'pointer',
                       fontSize: '0.85rem',
                       fontWeight: selectedOpportunityTags.includes(tag) ? 'bold' : 'normal'
@@ -1125,15 +1125,15 @@ function Customize() {
                       padding: '4px 8px',
                       border: '1px solid #dc3545',
                       borderRadius: '12px',
-                      background: '#f8d7da',
-                      color: '#721c24',
+                      background: 'rgba(220,53,69,0.15)',
+                      color: 'var(--danger)',
                       cursor: 'pointer',
                       fontSize: '0.8rem'
                     }}
                   >
                     Clear Filters
                   </button>
-                  <span style={{marginLeft: '12px', fontSize: '0.9rem', color: '#666'}}>
+                  <span style={{marginLeft: '12px', fontSize: '0.9rem', color: 'var(--text-secondary)'}}>
                     Showing {opportunities.length} of {allOpportunities.length} opportunities
                   </span>
                 </div>
@@ -1185,7 +1185,7 @@ function Customize() {
                     <label className="form-label">
                       Growth Path
                       {editingOpportunity?.path_locked && (
-                        <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: '#856404', background: '#fff3cd', padding: '2px 8px', borderRadius: '12px' }}>
+                        <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: 'var(--warning)', background: 'rgba(255,193,7,0.15)', padding: '2px 8px', borderRadius: '12px' }}>
                           🔒 Locked at level 3
                         </span>
                       )}
@@ -1193,7 +1193,7 @@ function Customize() {
                     {editingOpportunity?.path_locked ? (
                       <div style={{ padding: '10px 14px', background: 'var(--bg-secondary, #f5f5f5)', border: '1px solid #ccc', borderRadius: '8px', fontSize: '0.9rem' }}>
                         {PATHS[opportunityForm.path]?.icon} {PATHS[opportunityForm.path]?.name} — <em>{PATHS[opportunityForm.path]?.philosophy}</em>
-                        <div style={{ fontSize: '0.78rem', color: '#666', marginTop: '4px' }}>Path is permanently locked. It cannot be changed.</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Path is permanently locked. It cannot be changed.</div>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -1212,18 +1212,18 @@ function Customize() {
                                 padding: '10px 12px',
                                 border: isSelected ? '2px solid #1976d2' : '1px solid #ccc',
                                 borderRadius: '8px',
-                                background: isSelected ? '#e3f2fd' : 'var(--bg-secondary, #f5f5f5)',
+                                background: isSelected ? 'rgba(25,118,210,0.15)' : 'var(--bg-secondary)',
                                 cursor: 'pointer',
                                 textAlign: 'left',
                               }}
                             >
                               <span style={{ fontSize: '1.2em', lineHeight: 1.2 }}>{p.icon}</span>
                               <div>
-                                <div style={{ fontWeight: isSelected ? 700 : 500, fontSize: '0.9rem', color: isSelected ? '#1565c0' : 'var(--text-primary, #333)' }}>
+                                <div style={{ fontWeight: isSelected ? 700 : 500, fontSize: '0.9rem', color: isSelected ? '#2196f3' : 'var(--text-primary)' }}>
                                   {p.name}
                                 </div>
-                                <div style={{ fontSize: '0.78rem', color: '#666', marginTop: '2px' }}>{p.philosophy}</div>
-                                <div style={{ fontSize: '0.72rem', color: '#888', marginTop: '3px' }}>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>{p.philosophy}</div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>
                                   {p.labels.join(' → ')}
                                 </div>
                               </div>
@@ -1288,8 +1288,8 @@ function Customize() {
                         return (
                           <>
                             <span style={{
-                              background: '#f3e5f5',
-                              color: '#6a1b9a',
+                              background: 'rgba(156,39,176,0.15)',
+                              color: '#ab47bc',
                               padding: '2px 8px',
                               borderRadius: '12px',
                               fontSize: '0.75rem',
@@ -1298,15 +1298,15 @@ function Customize() {
                               {pathInfo.icon} {levelInfo.fullLabel}{levelInfo.isPrestige ? ` — sub ${levelInfo.prestigeSub}` : ''}
                             </span>
                             {opportunity.path_locked && (
-                              <span style={{ fontSize: '0.72rem', color: '#856404' }}>🔒</span>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--warning)' }}>🔒</span>
                             )}
                           </>
                         );
                       })()}
                       {(eventCountsPerOpp[opportunity.id] || 0) > 0 && (
                         <span style={{
-                          background: '#e3f2fd',
-                          color: '#1565c0',
+                          background: 'rgba(25,118,210,0.15)',
+                          color: '#2196f3',
                           padding: '2px 8px',
                           borderRadius: '12px',
                           fontSize: '0.75rem',
@@ -1344,8 +1344,8 @@ function Customize() {
                       {opportunity.tags.map(tag => (
                         <span key={tag} style={{
                           display: 'inline-block',
-                          background: '#e3f2fd',
-                          color: '#1976d2',
+                          background: 'rgba(25,118,210,0.15)',
+                          color: '#2196f3',
                           padding: '2px 8px',
                           borderRadius: '12px',
                           fontSize: '0.75rem'
@@ -1572,9 +1572,9 @@ function Customize() {
 
             {importResult && (
               <div style={{
-                background: '#d4edda',
-                border: '1px solid #c3e6cb',
-                color: '#155724',
+                background: 'rgba(40,167,69,0.15)',
+                border: '1px solid rgba(40,167,69,0.3)',
+                color: 'var(--success)',
                 padding: '12px',
                 borderRadius: '8px',
                 marginBottom: '20px'

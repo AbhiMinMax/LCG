@@ -308,7 +308,7 @@ function CheckHistory() {
                       <h4>💭 Thoughts During Event</h4>
                       {event.selected_back_thought && (
                         <div style={{ marginBottom: '8px' }}>
-                          <div style={{ fontSize: '0.78rem', color: '#c62828', fontWeight: 600, marginBottom: '4px' }}>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--danger)', fontWeight: 600, marginBottom: '4px' }}>
                             😈 Unhelpful thought
                           </div>
                           <ThoughtPassage thought={event.selected_back_thought} type="back" />
@@ -316,7 +316,7 @@ function CheckHistory() {
                       )}
                       {event.selected_forth_thought && (
                         <div>
-                          <div style={{ fontSize: '0.78rem', color: '#1565c0', fontWeight: 600, marginBottom: '4px' }}>
+                          <div style={{ fontSize: '0.78rem', color: '#2196f3', fontWeight: 600, marginBottom: '4px' }}>
                             😇 Helpful thought
                           </div>
                           <ThoughtPassage thought={event.selected_forth_thought} type="forth" />
