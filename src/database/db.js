@@ -1,5 +1,6 @@
 // Offline-first database using Dexie (IndexedDB wrapper)
 import Dexie from 'dexie';
+import { PATH_LOCK_THRESHOLD } from '../utils/pathUtils';
 
 export class LifeProgressDB extends Dexie {
   constructor() {
@@ -93,6 +94,20 @@ export class LifeProgressDB extends Dexie {
           if (opp.game_xp === undefined) opp.game_xp = 0;
         }),
       ]);
+    });
+
+    // Version 6: Add path and path_locked to opportunities
+    this.version(6).stores({
+      situations: '++id, title, description, tags, isMeta, challenging_level, created_at, updated_at',
+      opportunities: '++id, title, description, tags, current_xp, game_xp, path, path_locked, current_level, created_at, updated_at',
+      situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
+      events: '++id, title, situation_id, event_description, choice_value, xp_change, game_xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
+      config: '++id, key, value'
+    }).upgrade(tx => {
+      return tx.opportunities.toCollection().modify(opp => {
+        if (!opp.path) opp.path = 'default';
+        if (opp.path_locked === undefined) opp.path_locked = false;
+      });
     });
   }
 }
@@ -751,8 +766,14 @@ export const dbHelpers = {
         // Also accumulate game XP when game mode is on
         if (isGameMode && gameXpChange !== null) {
           const newGameXp = Math.max(0, (opportunity.game_xp || 0) + gameXpChange);
-          await db.opportunities.update(opportunity.id, { game_xp: newGameXp });
+          const pathUpdates = { game_xp: newGameXp };
+          // Lock path permanently once level 3 threshold is crossed
+          if (!opportunity.path_locked && newGameXp >= PATH_LOCK_THRESHOLD) {
+            pathUpdates.path_locked = true;
+          }
+          await db.opportunities.update(opportunity.id, pathUpdates);
           updated.game_xp = newGameXp;
+          if (pathUpdates.path_locked) updated.path_locked = true;
         }
         updatedOpportunities.push(updated);
       }
@@ -946,20 +967,32 @@ export const dbHelpers = {
   },
 
   // Create a new opportunity
-  async createOpportunity(title, description, tags = [], initialLevel = 1) {
+  async createOpportunity(title, description, tags = [], initialLevel = 1, path = 'default') {
     const level = Math.max(1, Math.min(100, parseInt(initialLevel) || 1));
     const opportunity = {
       title: title.trim(),
       description: description.trim(),
       tags: Array.isArray(tags) ? tags.filter(tag => tag.trim()) : [],
       current_xp: 0,
+      game_xp: 0,
       current_level: level,
+      path: path || 'default',
+      path_locked: false,
       created_at: new Date(),
       updated_at: new Date()
     };
-    
+
     const id = await db.opportunities.add(opportunity);
     return { ...opportunity, id };
+  },
+
+  // Update path for an opportunity (only if not locked)
+  async updateOpportunityPath(id, path) {
+    const opp = await db.opportunities.get(id);
+    if (!opp) return null;
+    if (opp.path_locked) return opp; // silently no-op if locked
+    await db.opportunities.update(id, { path, updated_at: new Date() });
+    return await db.opportunities.get(id);
   },
 
   // Update an existing opportunity

@@ -3,6 +3,7 @@ import { db, dbHelpers, ensureDefaultData } from '../database/db';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import { ThoughtPair } from '../components/ThoughtPassage';
+import { PATHS, PATH_KEYS, getPathLevel } from '../utils/pathUtils';
 import './ProgressStyles.css';
 
 function Customize() {
@@ -62,7 +63,8 @@ function Customize() {
     title: '',
     description: '',
     tags: [],
-    initialLevel: 1
+    initialLevel: 1,
+    path: 'default'
   });
 
   useEffect(() => {
@@ -313,12 +315,17 @@ function Customize() {
           opportunityForm.tags,
           opportunityForm.initialLevel
         );
+        // Update path only if not locked
+        if (!editingOpportunity.path_locked) {
+          await dbHelpers.updateOpportunityPath(editingOpportunity.id, opportunityForm.path);
+        }
       } else {
         await dbHelpers.createOpportunity(
           opportunityForm.title,
           opportunityForm.description,
           opportunityForm.tags,
-          opportunityForm.initialLevel
+          opportunityForm.initialLevel,
+          opportunityForm.path
         );
       }
 
@@ -337,7 +344,8 @@ function Customize() {
       title: opportunity.title,
       description: opportunity.description,
       tags: opportunity.tags || [],
-      initialLevel: opportunity.current_level || 1
+      initialLevel: opportunity.current_level || 1,
+      path: opportunity.path || 'default'
     });
     setShowOpportunityForm(true);
   };
@@ -380,7 +388,7 @@ function Customize() {
   };
 
   const resetOpportunityForm = () => {
-    setOpportunityForm({ title: '', description: '', tags: [], initialLevel: 1 });
+    setOpportunityForm({ title: '', description: '', tags: [], initialLevel: 1, path: 'default' });
     setEditingOpportunity(null);
     setShowOpportunityForm(false);
   };
@@ -1171,6 +1179,67 @@ function Customize() {
                   />
                 </div>
 
+                {/* Path selection — only shown when game mode is enabled */}
+                {gameModeEnabled && (
+                  <div className="form-group">
+                    <label className="form-label">
+                      Growth Path
+                      {editingOpportunity?.path_locked && (
+                        <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: '#856404', background: '#fff3cd', padding: '2px 8px', borderRadius: '12px' }}>
+                          🔒 Locked at level 3
+                        </span>
+                      )}
+                    </label>
+                    {editingOpportunity?.path_locked ? (
+                      <div style={{ padding: '10px 14px', background: 'var(--bg-secondary, #f5f5f5)', border: '1px solid #ccc', borderRadius: '8px', fontSize: '0.9rem' }}>
+                        {PATHS[opportunityForm.path]?.icon} {PATHS[opportunityForm.path]?.name} — <em>{PATHS[opportunityForm.path]?.philosophy}</em>
+                        <div style={{ fontSize: '0.78rem', color: '#666', marginTop: '4px' }}>Path is permanently locked. It cannot be changed.</div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {PATH_KEYS.map(key => {
+                          const p = PATHS[key];
+                          const isSelected = opportunityForm.path === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setOpportunityForm({ ...opportunityForm, path: key })}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '10px',
+                                padding: '10px 12px',
+                                border: isSelected ? '2px solid #1976d2' : '1px solid #ccc',
+                                borderRadius: '8px',
+                                background: isSelected ? '#e3f2fd' : 'var(--bg-secondary, #f5f5f5)',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                              }}
+                            >
+                              <span style={{ fontSize: '1.2em', lineHeight: 1.2 }}>{p.icon}</span>
+                              <div>
+                                <div style={{ fontWeight: isSelected ? 700 : 500, fontSize: '0.9rem', color: isSelected ? '#1565c0' : 'var(--text-primary, #333)' }}>
+                                  {p.name}
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: '#666', marginTop: '2px' }}>{p.philosophy}</div>
+                                <div style={{ fontSize: '0.72rem', color: '#888', marginTop: '3px' }}>
+                                  {p.labels.join(' → ')}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {!editingOpportunity?.path_locked && (
+                      <small style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
+                        Path locks permanently after reaching level 3 (700 game XP).
+                      </small>
+                    )}
+                  </div>
+                )}
+
                 <div className="form-group">
                   <label className="form-label">{editingOpportunity ? 'Current Level' : 'Initial Level'}</label>
                   <input
@@ -1183,7 +1252,7 @@ function Customize() {
                     placeholder="1"
                   />
                   <small style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
-                    {editingOpportunity 
+                    {editingOpportunity
                       ? 'Update the current level for this opportunity (1-100).'
                       : 'Set the starting level for this opportunity (1-100). Default is 1.'
                     }
@@ -1212,6 +1281,28 @@ function Customize() {
                     <div className="opportunity-stats" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <span className="level-badge">Level {opportunity.current_level}</span>
                       <span className="xp-text">{opportunity.current_xp}/100 XP</span>
+                      {gameModeEnabled && (() => {
+                        const pathKey = opportunity.path || 'default';
+                        const pathInfo = PATHS[pathKey];
+                        const levelInfo = getPathLevel(opportunity.game_xp || 0, pathKey);
+                        return (
+                          <>
+                            <span style={{
+                              background: '#f3e5f5',
+                              color: '#6a1b9a',
+                              padding: '2px 8px',
+                              borderRadius: '12px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600
+                            }}>
+                              {pathInfo.icon} {levelInfo.fullLabel}{levelInfo.isPrestige ? ` — sub ${levelInfo.prestigeSub}` : ''}
+                            </span>
+                            {opportunity.path_locked && (
+                              <span style={{ fontSize: '0.72rem', color: '#856404' }}>🔒</span>
+                            )}
+                          </>
+                        );
+                      })()}
                       {(eventCountsPerOpp[opportunity.id] || 0) > 0 && (
                         <span style={{
                           background: '#e3f2fd',
