@@ -76,6 +76,24 @@ export class LifeProgressDB extends Dexie {
         }
       });
     });
+
+    // Version 5: Add isMeta to situations, game_xp to opportunities, game_xp_change to events
+    this.version(5).stores({
+      situations: '++id, title, description, tags, isMeta, challenging_level, created_at, updated_at',
+      opportunities: '++id, title, description, tags, current_xp, game_xp, current_level, created_at, updated_at',
+      situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
+      events: '++id, title, situation_id, event_description, choice_value, xp_change, game_xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
+      config: '++id, key, value'
+    }).upgrade(tx => {
+      return Promise.all([
+        tx.situations.toCollection().modify(situation => {
+          if (situation.isMeta === undefined) situation.isMeta = false;
+        }),
+        tx.opportunities.toCollection().modify(opp => {
+          if (opp.game_xp === undefined) opp.game_xp = 0;
+        }),
+      ]);
+    });
   }
 }
 
@@ -565,6 +583,21 @@ export const dbHelpers = {
       .toArray();
   },
 
+  // Game mode XP calculation (separate from standard mode XP)
+  // Positive XP is doubled for real situations (isMeta = false)
+  // Negative XP is never doubled
+  calculateGameXpChange(choiceValue, isMeta = false) {
+    const baseXpMap = {
+      1: -5,  // Misguided Action
+      2: -2,  // Didnt Try
+      3: 4,   // Tried
+      4: 10,  // Well Done!
+    };
+    let xp = baseXpMap[choiceValue] ?? 0;
+    if (xp > 0 && !isMeta) xp *= 2;
+    return xp;
+  },
+
   // XP and Level calculation
   calculateXpChange(choiceValue, challengingLevel = 3, isDynamicXp = false) {
     const baseXpMap = {
@@ -650,21 +683,27 @@ export const dbHelpers = {
 
   // Add new event and update all linked opportunities
   async addEvent(situationId, eventDescription, choiceValue, eventTitle = null, selectedBackThought = null, selectedForthThought = null) {
-    // Get situation details for challenging level
+    // Get situation details for challenging level and isMeta
     const situation = await db.situations.get(situationId);
     const challengingLevel = situation ? situation.challenging_level : 3;
-    
-    // Check if dynamic XP is enabled
-    const isDynamicXp = await this.getConfig('dynamicXpEnabled', false);
-    
+    const isMeta = situation ? (situation.isMeta === true) : false;
+
+    // Check enabled features
+    const [isDynamicXp, isGameMode] = await Promise.all([
+      this.getConfig('dynamicXpEnabled', false),
+      this.getConfig('gameModeEnabled', false),
+    ]);
+
     const xpChange = this.calculateXpChange(choiceValue, challengingLevel, isDynamicXp);
+    const gameXpChange = isGameMode ? this.calculateGameXpChange(choiceValue, isMeta) : null;
+
     const opportunities = await this.getOpportunitiesForSituation(situationId);
     const affectedOpportunityIds = opportunities.map(opp => opp.id);
 
     // Generate title if not provided
     const choiceLabels = {
       1: 'Misguided Response',
-      2: 'Avoided Challenge', 
+      2: 'Avoided Challenge',
       3: 'Attempted Response',
       4: 'Excellent Response'
     };
@@ -677,6 +716,7 @@ export const dbHelpers = {
       event_description: eventDescription,
       choice_value: choiceValue,
       xp_change: xpChange,
+      game_xp_change: gameXpChange,
       selected_back_thought: selectedBackThought,
       selected_forth_thought: selectedForthThought,
       timestamp: new Date(),
@@ -707,12 +747,21 @@ export const dbHelpers = {
     const updatedOpportunities = [];
     for (const opportunity of opportunities) {
       const updated = await this.updateOpportunityXp(opportunity.id, xpChange);
-      if (updated) updatedOpportunities.push(updated);
+      if (updated) {
+        // Also accumulate game XP when game mode is on
+        if (isGameMode && gameXpChange !== null) {
+          const newGameXp = Math.max(0, (opportunity.game_xp || 0) + gameXpChange);
+          await db.opportunities.update(opportunity.id, { game_xp: newGameXp });
+          updated.game_xp = newGameXp;
+        }
+        updatedOpportunities.push(updated);
+      }
     }
 
     return {
       eventId,
       xpChange,
+      gameXpChange,
       challengingLevel,
       updatedOpportunities
     };
@@ -849,11 +898,12 @@ export const dbHelpers = {
 
   // Create a new situation
   // thoughtPairs: [{back: string|null, forth: string|null}] — null means no thought on that side
-  async createSituation(title, description, tags = [], challengingLevel = 3, thoughtPairs = []) {
+  async createSituation(title, description, tags = [], challengingLevel = 3, thoughtPairs = [], isMeta = false) {
     const situation = {
       title: title.trim(),
       description: description.trim(),
       tags: Array.isArray(tags) ? tags.filter(tag => tag.trim()) : [],
+      isMeta: !!isMeta,
       challenging_level: Math.max(1, Math.min(5, parseInt(challengingLevel) || 3)),
       thought_pairs: Array.isArray(thoughtPairs)
         ? thoughtPairs.filter(p => (p.back && p.back.trim()) || (p.forth && p.forth.trim()))
@@ -868,7 +918,7 @@ export const dbHelpers = {
   },
 
   // Update an existing situation
-  async updateSituation(id, title, description, tags = [], challengingLevel = null, thoughtPairs = null) {
+  async updateSituation(id, title, description, tags = [], challengingLevel = null, thoughtPairs = null, isMeta = null) {
     const updates = {
       title: title.trim(),
       description: description.trim(),
@@ -885,6 +935,10 @@ export const dbHelpers = {
         ? thoughtPairs.filter(p => (p.back && p.back.trim()) || (p.forth && p.forth.trim()))
             .map(p => ({ back: p.back?.trim() || null, forth: p.forth?.trim() || null }))
         : [];
+    }
+
+    if (isMeta !== null) {
+      updates.isMeta = !!isMeta;
     }
 
     await db.situations.update(id, updates);

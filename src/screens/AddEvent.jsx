@@ -9,6 +9,9 @@ const CHOICE_OPTIONS = [
   { value: 4, label: 'Well Done!', xp: 5, color: '#007bff' }
 ];
 
+// Game mode base XP (before real/meta doubling)
+const GAME_BASE_XP = { 1: -5, 2: -2, 3: 4, 4: 10 };
+
 function AddEvent() {
   const [situations, setSituations] = useState([]);
   const [filteredSituations, setFilteredSituations] = useState([]);
@@ -20,6 +23,7 @@ function AddEvent() {
   const [affectedOpportunities, setAffectedOpportunities] = useState([]);
   const [currentSituation, setCurrentSituation] = useState(null);
   const [dynamicXpEnabled, setDynamicXpEnabled] = useState(false);
+  const [gameModeEnabled, setGameModeEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -34,10 +38,14 @@ function AddEvent() {
 
   const loadDynamicXpConfig = async () => {
     try {
-      const dynamicXp = await dbHelpers.getConfig('dynamicXpEnabled', false);
+      const [dynamicXp, gameMode] = await Promise.all([
+        dbHelpers.getConfig('dynamicXpEnabled', false),
+        dbHelpers.getConfig('gameModeEnabled', false),
+      ]);
       setDynamicXpEnabled(dynamicXp);
+      setGameModeEnabled(gameMode);
     } catch (error) {
-      console.error('Error loading dynamic XP config:', error);
+      console.error('Error loading XP config:', error);
     }
   };
 
@@ -334,48 +342,60 @@ function AddEvent() {
           <div className="form-group">
             <label className="form-label">Your Response Choice *</label>
             <div className="choice-group">
-              {CHOICE_OPTIONS.map(choice => (
-                <label
-                  key={choice.value}
-                  className={`choice-option ${selectedChoice === choice.value.toString() ? 'selected' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="choice"
-                    value={choice.value}
-                    checked={selectedChoice === choice.value.toString()}
-                    onChange={(e) => setSelectedChoice(e.target.value)}
-                    className="choice-radio"
-                  />
-                  <div className="choice-content">
-                    <div className="choice-label">{choice.label}</div>
-                    <div 
-                      className="choice-xp" 
-                      style={{ color: choice.color }}
-                    >
-                      {(() => {
-                        // Use the same calculation as currentXp but for this specific choice
-                        if (selectedChoice === choice.value.toString()) {
-                          return `${currentXp > 0 ? '+' : ''}${currentXp} XP`;
-                        } else {
-                          let displayXp = choice.xp;
-                          if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-                            const multiplier = Math.max(1.0, currentSituation.challenging_level / 3);
-                            displayXp = Math.round(choice.xp * multiplier);
-                          }
-                          return `${displayXp > 0 ? '+' : ''}${displayXp} XP`;
-                        }
-                      })()}
-                      {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
-                        <span style={{fontSize: '0.8em', marginLeft: '4px', opacity: 0.7}}>
-                          (×{Math.max(1.0, currentSituation.challenging_level / 3).toFixed(1)})
-                        </span>
-                      )}
+              {CHOICE_OPTIONS.map(choice => {
+                const isReal = currentSituation && !currentSituation.isMeta;
+                // Compute display XP for this choice
+                let displayXp;
+                if (gameModeEnabled) {
+                  let base = GAME_BASE_XP[choice.value] ?? 0;
+                  if (base > 0 && isReal) base *= 2;
+                  displayXp = base;
+                } else if (selectedChoice === choice.value.toString()) {
+                  displayXp = currentXp;
+                } else {
+                  displayXp = choice.xp;
+                  if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
+                    const multiplier = Math.max(1.0, currentSituation.challenging_level / 3);
+                    displayXp = Math.round(choice.xp * multiplier);
+                  }
+                }
+                const isDoubled = gameModeEnabled && GAME_BASE_XP[choice.value] > 0 && isReal;
+                return (
+                  <label
+                    key={choice.value}
+                    className={`choice-option ${selectedChoice === choice.value.toString() ? 'selected' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="choice"
+                      value={choice.value}
+                      checked={selectedChoice === choice.value.toString()}
+                      onChange={(e) => setSelectedChoice(e.target.value)}
+                      className="choice-radio"
+                    />
+                    <div className="choice-content">
+                      <div className="choice-label">{choice.label}</div>
+                      <div className="choice-xp" style={{ color: choice.color }}>
+                        {displayXp > 0 ? '+' : ''}{displayXp} XP
+                        {isDoubled && (
+                          <span style={{ fontSize: '0.8em', marginLeft: '4px' }} title="Real situation — positive XP doubled">⚡</span>
+                        )}
+                        {!gameModeEnabled && dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
+                          <span style={{ fontSize: '0.8em', marginLeft: '4px', opacity: 0.7 }}>
+                            (×{Math.max(1.0, currentSituation.challenging_level / 3).toFixed(1)})
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </label>
-              ))}
+                  </label>
+                );
+              })}
             </div>
+            {gameModeEnabled && currentSituation && (
+              <div style={{ fontSize: '0.82em', color: '#666', marginTop: '6px' }}>
+                {currentSituation.isMeta ? '🪞 Meta situation — standard XP' : '🌍 Real situation — positive XP doubled ⚡'}
+              </div>
+            )}
           </div>
 
           {currentSituation?.thought_pairs?.length > 0 && (

@@ -39,6 +39,7 @@ function Customize() {
   // Configuration states
   const [dynamicXpEnabled, setDynamicXpEnabled] = useState(false);
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
+  const [gameModeEnabled, setGameModeEnabled] = useState(false);
   const [ensuringDefaults, setEnsuringDefaults] = useState(false);
   
   // Form states
@@ -53,7 +54,8 @@ function Customize() {
     tags: [],
     linkedOpportunities: [],
     challengingLevel: 3,
-    thoughtPairs: []   // [{back: string|null, forth: string|null}]
+    thoughtPairs: [],   // [{back: string|null, forth: string|null}]
+    isMeta: false
   });
   
   const [opportunityForm, setOpportunityForm] = useState({
@@ -71,12 +73,14 @@ function Customize() {
 
   const loadConfig = async () => {
     try {
-      const [dynamicXp, cloudSync] = await Promise.all([
+      const [dynamicXp, cloudSync, gameMode] = await Promise.all([
         dbHelpers.getConfig('dynamicXpEnabled', false),
-        dbHelpers.getConfig('cloudSyncEnabled', false)
+        dbHelpers.getConfig('cloudSyncEnabled', false),
+        dbHelpers.getConfig('gameModeEnabled', false),
       ]);
       setDynamicXpEnabled(dynamicXp);
       setCloudSyncEnabled(cloudSync);
+      setGameModeEnabled(gameMode);
     } catch (error) {
       console.error('Error loading config:', error);
     }
@@ -216,7 +220,8 @@ function Customize() {
           situationForm.description,
           situationForm.tags,
           situationForm.challengingLevel,
-          situationForm.thoughtPairs
+          situationForm.thoughtPairs,
+          situationForm.isMeta
         );
         situationId = editingSituation.id;
       } else {
@@ -225,7 +230,8 @@ function Customize() {
           situationForm.description,
           situationForm.tags,
           situationForm.challengingLevel,
-          situationForm.thoughtPairs
+          situationForm.thoughtPairs,
+          situationForm.isMeta
         );
         situationId = newSituation.id;
       }
@@ -261,7 +267,8 @@ function Customize() {
       tags: situation.tags || [],
       linkedOpportunities: situation.opportunities.map(opp => opp.id),
       challengingLevel: situation.challenging_level || 3,
-      thoughtPairs
+      thoughtPairs,
+      isMeta: situation.isMeta === true
     });
     setShowSituationForm(true);
   };
@@ -365,7 +372,8 @@ function Customize() {
       tags: [],
       linkedOpportunities: [],
       challengingLevel: 3,
-      thoughtPairs: []
+      thoughtPairs: [],
+      isMeta: false
     });
     setEditingSituation(null);
     setShowSituationForm(false);
@@ -493,6 +501,17 @@ function Customize() {
       const newValue = !dynamicXpEnabled;
       await dbHelpers.setConfig('dynamicXpEnabled', newValue);
       setDynamicXpEnabled(newValue);
+    } catch (error) {
+      console.error('Error updating config:', error);
+      alert('Error updating configuration. Please try again.');
+    }
+  };
+
+  const handleGameModeToggle = async () => {
+    try {
+      const newValue = !gameModeEnabled;
+      await dbHelpers.setConfig('gameModeEnabled', newValue);
+      setGameModeEnabled(newValue);
     } catch (error) {
       console.error('Error updating config:', error);
       alert('Error updating configuration. Please try again.');
@@ -717,6 +736,51 @@ function Customize() {
                 </div>
 
                 <div className="form-group">
+                  <label className="form-label">Situation Type</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setSituationForm({ ...situationForm, isMeta: false })}
+                      style={{
+                        flex: 1,
+                        padding: '10px',
+                        border: !situationForm.isMeta ? '2px solid #28a745' : '1px solid #ccc',
+                        borderRadius: '8px',
+                        background: !situationForm.isMeta ? '#d4edda' : 'var(--bg-secondary, #f5f5f5)',
+                        color: !situationForm.isMeta ? '#155724' : 'var(--text-primary, #333)',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        fontWeight: !situationForm.isMeta ? 600 : 400
+                      }}
+                    >
+                      🌍 Real
+                      <div style={{ fontSize: '0.75rem', marginTop: '2px', fontWeight: 400 }}>Actual life events</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSituationForm({ ...situationForm, isMeta: true })}
+                      style={{
+                        flex: 1,
+                        padding: '10px',
+                        border: situationForm.isMeta ? '2px solid #6c757d' : '1px solid #ccc',
+                        borderRadius: '8px',
+                        background: situationForm.isMeta ? '#e2e3e5' : 'var(--bg-secondary, #f5f5f5)',
+                        color: situationForm.isMeta ? '#383d41' : 'var(--text-primary, #333)',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        fontWeight: situationForm.isMeta ? 600 : 400
+                      }}
+                    >
+                      🪞 Meta
+                      <div style={{ fontSize: '0.75rem', marginTop: '2px', fontWeight: 400 }}>Reflection / thinking</div>
+                    </button>
+                  </div>
+                  <small style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
+                    Real situations award double positive XP in game mode
+                  </small>
+                </div>
+
+                <div className="form-group">
                   <label className="form-label" style={{ marginBottom: '8px' }}>💭 Internal Dialogue</label>
                   <div style={{ background: '#f8f9fa', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e9ecef', marginBottom: '12px' }}>
                     <p style={{ fontSize: '0.85rem', color: '#6c757d', margin: 0, lineHeight: '1.4' }}>
@@ -869,6 +933,16 @@ function Customize() {
                   <div className="item-title-section">
                     <h4>{situation.title}</h4>
                     <div className="situation-stats" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{
+                        background: situation.isMeta ? '#e2e3e5' : '#d4edda',
+                        color: situation.isMeta ? '#383d41' : '#155724',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600
+                      }}>
+                        {situation.isMeta ? '🪞 Meta' : '🌍 Real'}
+                      </span>
                       <span className="challenging-badge" style={{
                         background: situation.challenging_level >= 4 ? '#dc3545' : situation.challenging_level >= 3 ? '#ffc107' : '#28a745',
                         color: 'white',
@@ -1243,6 +1317,32 @@ function Customize() {
               borderRadius: '8px',
               marginBottom: '20px'
             }}>
+              <h4 style={{margin: '0 0 12px 0', fontSize: '1rem'}}>🎮 Game Mode</h4>
+              <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px'}}>
+                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'}}>
+                  <input
+                    type="checkbox"
+                    checked={gameModeEnabled}
+                    onChange={handleGameModeToggle}
+                    style={{transform: 'scale(1.2)'}}
+                  />
+                  <span style={{fontWeight: 'bold'}}>Enable Game Mode</span>
+                </label>
+              </div>
+              <p style={{margin: '0', fontSize: '0.9rem', color: 'var(--text-secondary)'}}>
+                {gameModeEnabled
+                  ? "Game mode active — new XP values (Well Done +10/+20, Tried +4/+8), paths, streaks, and more. Real situations award double positive XP."
+                  : "Game mode off — standard XP and views. Enable to unlock the full game layer."
+                }
+              </p>
+            </div>
+
+            <div style={{
+              padding: '15px',
+              background: 'var(--bg-tertiary)',
+              borderRadius: '8px',
+              marginBottom: '20px'
+            }}>
               <h4 style={{margin: '0 0 12px 0', fontSize: '1rem'}}>⚡ XP System</h4>
               <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px'}}>
                 <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'}}>
@@ -1256,8 +1356,8 @@ function Customize() {
                 </label>
               </div>
               <p style={{margin: '0', fontSize: '0.9rem', color: 'var(--text-secondary)'}}>
-                {dynamicXpEnabled 
-                  ? "XP rewards are multiplied based on situation challenging level. Higher challenging levels give more XP." 
+                {dynamicXpEnabled
+                  ? "XP rewards are multiplied based on situation challenging level. Higher challenging levels give more XP."
                   : "XP rewards are fixed regardless of situation challenging level."
                 }
               </p>
