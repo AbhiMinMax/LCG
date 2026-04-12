@@ -40,6 +40,17 @@ function CheckHistory() {
     }
   };
 
+  const handleDeleteEvent = async (eventId) => {
+    if (!confirm('Delete this event? This cannot be undone.')) return;
+    try {
+      await dbHelpers.deleteEvent(eventId);
+      setEvents(prev => prev.filter(e => e.id !== eventId));
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert('Error deleting event. Please try again.');
+    }
+  };
+
   const toggleEventExpansion = (eventId) => {
     const newExpanded = new Set(expandedEvents);
     if (newExpanded.has(eventId)) {
@@ -218,12 +229,28 @@ function CheckHistory() {
                   <div className="event-situation">{event.situation.title}</div>
                 </div>
                 <div className="event-summary">
-                  <span 
+                  <span
                     className="xp-change"
                     style={getXpChangeStyle(event.xp_change)}
                   >
                     {event.xp_change > 0 ? '+' : ''}{event.xp_change} XP
                   </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+                    title="Delete event"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#dc3545',
+                      fontSize: '1em',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      lineHeight: 1
+                    }}
+                  >
+                    🗑️
+                  </button>
                   <div className="expand-icon">
                     {isExpanded ? '▼' : '▶'}
                   </div>

@@ -16,33 +16,49 @@ function CheckProgress() {
   const [selectedOpportunity, setSelectedOpportunity] = useState(null);
   const [availableTags, setAvailableTags] = useState([]);
   const [selectedTags, setSelectedTags] = useState([]);
+  const [filterHasEvents, setFilterHasEvents] = useState(false);
+  const [eventCountsPerOpp, setEventCountsPerOpp] = useState({});
 
   useEffect(() => {
     loadOpportunities();
     loadTags();
+    loadEventCounts();
   }, []);
+
+  const loadEventCounts = async () => {
+    try {
+      const counts = await dbHelpers.getEventCountsPerOpportunity();
+      setEventCountsPerOpp(counts);
+    } catch (error) {
+      console.error('Error loading event counts:', error);
+    }
+  };
 
   useEffect(() => {
     const filterAndSort = () => {
       let filtered = allOpportunities;
-      
+
       if (selectedTags.length > 0) {
-        filtered = allOpportunities.filter(opportunity => 
-          opportunity.tags && 
+        filtered = filtered.filter(opportunity =>
+          opportunity.tags &&
           Array.isArray(opportunity.tags) &&
           selectedTags.some(tag => opportunity.tags.includes(tag))
         );
       }
-      
+
+      if (filterHasEvents) {
+        filtered = filtered.filter(opp => (eventCountsPerOpp[opp.id] || 0) > 0);
+      }
+
       switch (sortBy) {
         case 'alphabetical':
-          filtered.sort((a, b) => a.title.localeCompare(b.title));
+          filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
           break;
         case 'xp_percentage':
-          filtered.sort((a, b) => b.current_xp - a.current_xp);
+          filtered = [...filtered].sort((a, b) => b.current_xp - a.current_xp);
           break;
         case 'level':
-          filtered.sort((a, b) => {
+          filtered = [...filtered].sort((a, b) => {
             if (b.current_level !== a.current_level) {
               return b.current_level - a.current_level;
             }
@@ -50,12 +66,12 @@ function CheckProgress() {
           });
           break;
       }
-      
+
       setOpportunities(filtered);
     };
-    
+
     filterAndSort();
-  }, [sortBy, selectedTags, allOpportunities]);
+  }, [sortBy, selectedTags, filterHasEvents, eventCountsPerOpp, allOpportunities]);
 
   const loadOpportunities = async () => {
     try {
@@ -160,6 +176,15 @@ function CheckProgress() {
             ))}
           </select>
         </div>
+        <div style={{ marginTop: '12px' }}>
+          <button
+            className={`btn ${filterHasEvents ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ fontSize: '0.85em', padding: '6px 12px' }}
+            onClick={() => setFilterHasEvents(f => !f)}
+          >
+            📋 Event Logged {filterHasEvents ? `(${opportunities.length})` : ''}
+          </button>
+        </div>
       </div>
 
       {/* Tag Filter */}
@@ -229,6 +254,18 @@ function CheckProgress() {
                   <div className="opportunity-meta">
                     <span className="level-badge">Level {opportunity.current_level}</span>
                     <span className="xp-text">{opportunity.current_xp}/100 XP</span>
+                    {(eventCountsPerOpp[opportunity.id] || 0) > 0 && (
+                      <span style={{
+                        background: '#e3f2fd',
+                        color: '#1565c0',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600
+                      }}>
+                        📋 {eventCountsPerOpp[opportunity.id]} event{eventCountsPerOpp[opportunity.id] !== 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
                   {opportunity.tags && opportunity.tags.length > 0 && (
                     <div className="tags-container" style={{marginTop: '8px'}}>

@@ -748,6 +748,35 @@ export const dbHelpers = {
     return events;
   },
 
+  // Delete a single event by id
+  async deleteEvent(eventId) {
+    await db.events.delete(eventId);
+  },
+
+  // Get event counts keyed by situation_id: { [situationId]: count }
+  async getEventCountsPerSituation() {
+    const events = await db.events.toArray();
+    const counts = {};
+    for (const event of events) {
+      counts[event.situation_id] = (counts[event.situation_id] || 0) + 1;
+    }
+    return counts;
+  },
+
+  // Get event counts keyed by opportunity_id: { [oppId]: count }
+  async getEventCountsPerOpportunity() {
+    const events = await db.events.toArray();
+    const counts = {};
+    for (const event of events) {
+      if (Array.isArray(event.affected_opportunities)) {
+        for (const oppId of event.affected_opportunities) {
+          counts[oppId] = (counts[oppId] || 0) + 1;
+        }
+      }
+    }
+    return counts;
+  },
+
   // Get all opportunities sorted by different criteria
   async getOpportunitiesSorted(sortBy = 'alphabetical') {
     let opportunities = await db.opportunities.toArray();

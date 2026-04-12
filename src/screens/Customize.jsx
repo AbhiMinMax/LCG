@@ -25,6 +25,10 @@ function Customize() {
   const [situationSortBy, setSituationSortBy] = useState('alphabetical');
   const [opportunitySortBy, setOpportunitySortBy] = useState('alphabetical');
   const [filterSituationThoughts, setFilterSituationThoughts] = useState(false);
+  const [filterSituationHasEvents, setFilterSituationHasEvents] = useState(false);
+  const [filterOpportunityHasEvents, setFilterOpportunityHasEvents] = useState(false);
+  const [eventCountsPerSit, setEventCountsPerSit] = useState({});
+  const [eventCountsPerOpp, setEventCountsPerOpp] = useState({});
   
   // Export/Import states
   const [dataStats, setDataStats] = useState(null);
@@ -96,6 +100,10 @@ function Customize() {
         );
       }
 
+      if (filterSituationHasEvents) {
+        filtered = filtered.filter(situation => (eventCountsPerSit[situation.id] || 0) > 0);
+      }
+
       switch (situationSortBy) {
         case 'alphabetical':
           filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
@@ -112,20 +120,24 @@ function Customize() {
     };
 
     filterAndSortSituations();
-  }, [situationSortBy, selectedSituationTags, filterSituationThoughts, allSituations]);
+  }, [situationSortBy, selectedSituationTags, filterSituationThoughts, filterSituationHasEvents, eventCountsPerSit, allSituations]);
 
   useEffect(() => {
     const filterAndSortOpportunities = () => {
       let filtered = allOpportunities;
-      
+
       if (selectedOpportunityTags.length > 0) {
-        filtered = allOpportunities.filter(opportunity => 
-          opportunity.tags && 
+        filtered = allOpportunities.filter(opportunity =>
+          opportunity.tags &&
           Array.isArray(opportunity.tags) &&
           selectedOpportunityTags.some(tag => opportunity.tags.includes(tag))
         );
       }
-      
+
+      if (filterOpportunityHasEvents) {
+        filtered = filtered.filter(opp => (eventCountsPerOpp[opp.id] || 0) > 0);
+      }
+
       switch (opportunitySortBy) {
         case 'alphabetical':
           filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
@@ -150,15 +162,17 @@ function Customize() {
     };
     
     filterAndSortOpportunities();
-  }, [opportunitySortBy, selectedOpportunityTags, allOpportunities]);
+  }, [opportunitySortBy, selectedOpportunityTags, filterOpportunityHasEvents, eventCountsPerOpp, allOpportunities]);
 
   const loadData = async () => {
     try {
-      const [situationsData, opportunitiesData, sitTags, oppTags] = await Promise.all([
+      const [situationsData, opportunitiesData, sitTags, oppTags, sitCounts, oppCounts] = await Promise.all([
         dbHelpers.getSituationsWithOpportunities(),
         db.opportunities.toArray(),
         dbHelpers.getAllSituationTags(),
-        dbHelpers.getAllOpportunityTags()
+        dbHelpers.getAllOpportunityTags(),
+        dbHelpers.getEventCountsPerSituation(),
+        dbHelpers.getEventCountsPerOpportunity()
       ]);
       setAllSituations(situationsData);
       setSituations(situationsData);
@@ -166,6 +180,8 @@ function Customize() {
       setOpportunities(opportunitiesData);
       setAvailableSituationTags(sitTags);
       setAvailableOpportunityTags(oppTags);
+      setEventCountsPerSit(sitCounts);
+      setEventCountsPerOpp(oppCounts);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -578,13 +594,20 @@ function Customize() {
                 <option value="updated">Recently Updated</option>
               </select>
             </div>
-            <div style={{ marginTop: '12px' }}>
+            <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 className={`btn ${filterSituationThoughts ? 'btn-primary' : 'btn-secondary'}`}
                 style={{ fontSize: '0.85em', padding: '6px 12px' }}
                 onClick={() => setFilterSituationThoughts(f => !f)}
               >
                 💭 With Thoughts Only {filterSituationThoughts ? `(${situations.length})` : ''}
+              </button>
+              <button
+                className={`btn ${filterSituationHasEvents ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.85em', padding: '6px 12px' }}
+                onClick={() => setFilterSituationHasEvents(f => !f)}
+              >
+                📋 Event Logged {filterSituationHasEvents ? `(${situations.length})` : ''}
               </button>
             </div>
           </div>
@@ -845,7 +868,7 @@ function Customize() {
                 <div className="item-header">
                   <div className="item-title-section">
                     <h4>{situation.title}</h4>
-                    <div className="situation-stats">
+                    <div className="situation-stats" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <span className="challenging-badge" style={{
                         background: situation.challenging_level >= 4 ? '#dc3545' : situation.challenging_level >= 3 ? '#ffc107' : '#28a745',
                         color: 'white',
@@ -856,6 +879,18 @@ function Customize() {
                       }}>
                         Level {situation.challenging_level}/5
                       </span>
+                      {(eventCountsPerSit[situation.id] || 0) > 0 && (
+                        <span style={{
+                          background: '#e8f5e9',
+                          color: '#2e7d32',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                          fontWeight: 600
+                        }}>
+                          📋 {eventCountsPerSit[situation.id]} event{eventCountsPerSit[situation.id] !== 1 ? 's' : ''}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="item-actions">
@@ -964,6 +999,15 @@ function Customize() {
                 <option value="xp">XP Progress</option>
                 <option value="created">Newest First</option>
               </select>
+            </div>
+            <div style={{ marginTop: '12px' }}>
+              <button
+                className={`btn ${filterOpportunityHasEvents ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.85em', padding: '6px 12px' }}
+                onClick={() => setFilterOpportunityHasEvents(f => !f)}
+              >
+                📋 Event Logged {filterOpportunityHasEvents ? `(${opportunities.length})` : ''}
+              </button>
             </div>
           </div>
 
@@ -1091,9 +1135,21 @@ function Customize() {
                 <div className="item-header">
                   <div className="item-title-section">
                     <h4>{opportunity.title}</h4>
-                    <div className="opportunity-stats">
+                    <div className="opportunity-stats" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <span className="level-badge">Level {opportunity.current_level}</span>
                       <span className="xp-text">{opportunity.current_xp}/100 XP</span>
+                      {(eventCountsPerOpp[opportunity.id] || 0) > 0 && (
+                        <span style={{
+                          background: '#e3f2fd',
+                          color: '#1565c0',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                          fontWeight: 600
+                        }}>
+                          📋 {eventCountsPerOpp[opportunity.id]} event{eventCountsPerOpp[opportunity.id] !== 1 ? 's' : ''}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="item-actions">
