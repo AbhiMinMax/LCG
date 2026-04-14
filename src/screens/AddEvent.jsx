@@ -184,17 +184,24 @@ function AddEvent() {
     if (!selectedChoice) return 0;
     const choice = CHOICE_OPTIONS.find(opt => opt.value === parseInt(selectedChoice));
     if (!choice) return 0;
-    
+
+    if (gameModeEnabled) {
+      let base = GAME_BASE_XP[choice.value] ?? 0;
+      const isReal = currentSituation && !currentSituation.isMeta;
+      if (base > 0 && isReal) base *= 2;
+      return base;
+    }
+
     let xp = choice.xp;
-    
+
     // Apply dynamic XP calculation if enabled and we have a situation
     if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
       const multiplier = Math.max(1.0, currentSituation.challenging_level / 3); // Base level 3 = 1x, minimum 1x
       xp = Math.round(xp * multiplier);
     }
-    
+
     return xp;
-  }, [selectedChoice, dynamicXpEnabled, currentSituation]);
+  }, [selectedChoice, gameModeEnabled, dynamicXpEnabled, currentSituation]);
 
   const getChoiceXp = () => {
     return currentXp;
