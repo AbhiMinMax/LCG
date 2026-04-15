@@ -187,6 +187,10 @@ function AddEvent() {
 
     if (gameModeEnabled) {
       let base = GAME_BASE_XP[choice.value] ?? 0;
+      if (currentSituation && currentSituation.challenging_level) {
+        const multiplier = Math.max(1.0, currentSituation.challenging_level / 3);
+        base = Math.round(base * multiplier);
+      }
       const isReal = currentSituation && !currentSituation.isMeta;
       if (base > 0 && isReal) base *= 2;
       return base;
@@ -355,6 +359,10 @@ function AddEvent() {
                 let displayXp;
                 if (gameModeEnabled) {
                   let base = GAME_BASE_XP[choice.value] ?? 0;
+                  if (currentSituation && currentSituation.challenging_level) {
+                    const multiplier = Math.max(1.0, currentSituation.challenging_level / 3);
+                    base = Math.round(base * multiplier);
+                  }
                   if (base > 0 && isReal) base *= 2;
                   displayXp = base;
                 } else if (selectedChoice === choice.value.toString()) {
@@ -366,7 +374,7 @@ function AddEvent() {
                     displayXp = Math.round(choice.xp * multiplier);
                   }
                 }
-                const isDoubled = gameModeEnabled && GAME_BASE_XP[choice.value] > 0 && isReal;
+                const isDoubled = gameModeEnabled && isReal && GAME_BASE_XP[choice.value] > 0;
                 return (
                   <label
                     key={choice.value}

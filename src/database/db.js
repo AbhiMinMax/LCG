@@ -599,9 +599,9 @@ export const dbHelpers = {
   },
 
   // Game mode XP calculation (separate from standard mode XP)
-  // Positive XP is doubled for real situations (isMeta = false)
-  // Negative XP is never doubled
-  calculateGameXpChange(choiceValue, isMeta = false) {
+  // Difficulty multiplier applied first, then positive XP is doubled for real situations (isMeta = false)
+  // Negative XP gets the difficulty multiplier but is never doubled
+  calculateGameXpChange(choiceValue, isMeta = false, challengingLevel = 3) {
     const baseXpMap = {
       1: -5,  // Misguided Action
       2: -2,  // Didnt Try
@@ -609,6 +609,11 @@ export const dbHelpers = {
       4: 10,  // Well Done!
     };
     let xp = baseXpMap[choiceValue] ?? 0;
+    // Apply challenging level multiplier (same scale as dynamic XP: level 3 = 1x, minimum 1x)
+    if (challengingLevel) {
+      const multiplier = Math.max(1.0, challengingLevel / 3);
+      xp = Math.round(xp * multiplier);
+    }
     if (xp > 0 && !isMeta) xp *= 2;
     return xp;
   },
@@ -710,7 +715,7 @@ export const dbHelpers = {
     ]);
 
     const xpChange = this.calculateXpChange(choiceValue, challengingLevel, isDynamicXp);
-    const gameXpChange = isGameMode ? this.calculateGameXpChange(choiceValue, isMeta) : null;
+    const gameXpChange = isGameMode ? this.calculateGameXpChange(choiceValue, isMeta, challengingLevel) : null;
 
     const opportunities = await this.getOpportunitiesForSituation(situationId);
     const affectedOpportunityIds = opportunities.map(opp => opp.id);

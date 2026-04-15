@@ -24,10 +24,21 @@ function CheckHistory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('desc');
   const [filterThoughts, setFilterThoughts] = useState(false);
+  const [gameModeEnabled, setGameModeEnabled] = useState(false);
 
   useEffect(() => {
     loadEvents();
+    loadConfig();
   }, []);
+
+  const loadConfig = async () => {
+    try {
+      const gameMode = await dbHelpers.getConfig('gameModeEnabled', false);
+      setGameModeEnabled(gameMode);
+    } catch (error) {
+      console.error('Error loading config:', error);
+    }
+  };
 
   const loadEvents = async () => {
     try {
@@ -38,6 +49,13 @@ function CheckHistory() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Returns the XP value to display for an event:
+  // In game mode, use game_xp_change if it was logged under game mode; fallback to xp_change for older events.
+  const getDisplayXp = (event) => {
+    if (gameModeEnabled && event.game_xp_change != null) return event.game_xp_change;
+    return event.xp_change;
   };
 
   const handleDeleteEvent = async (eventId) => {
@@ -106,8 +124,8 @@ function CheckHistory() {
       switch (sortOrder) {
         case 'desc': return new Date(b.timestamp) - new Date(a.timestamp);
         case 'asc':  return new Date(a.timestamp) - new Date(b.timestamp);
-        case 'xp_high': return b.xp_change - a.xp_change;
-        case 'xp_low':  return a.xp_change - b.xp_change;
+        case 'xp_high': return getDisplayXp(b) - getDisplayXp(a);
+        case 'xp_low':  return getDisplayXp(a) - getDisplayXp(b);
         case 'situation': return a.situation.title.localeCompare(b.situation.title);
         case 'choice': return b.choice_value - a.choice_value;
         default: return 0;
@@ -116,10 +134,10 @@ function CheckHistory() {
 
   const getEventStats = () => {
     const totalEvents = events.length;
-    const totalXpGained = events.reduce((sum, event) => sum + Math.max(0, event.xp_change), 0);
-    const totalXpLost = events.reduce((sum, event) => sum + Math.min(0, event.xp_change), 0);
-    const avgXpPerEvent = totalEvents > 0 ? (events.reduce((sum, event) => sum + event.xp_change, 0) / totalEvents).toFixed(1) : 0;
-    
+    const totalXpGained = events.reduce((sum, event) => sum + Math.max(0, getDisplayXp(event)), 0);
+    const totalXpLost = events.reduce((sum, event) => sum + Math.min(0, getDisplayXp(event)), 0);
+    const avgXpPerEvent = totalEvents > 0 ? (events.reduce((sum, event) => sum + getDisplayXp(event), 0) / totalEvents).toFixed(1) : 0;
+
     return { totalEvents, totalXpGained, totalXpLost, avgXpPerEvent };
   };
 
@@ -231,9 +249,9 @@ function CheckHistory() {
                 <div className="event-summary">
                   <span
                     className="xp-change"
-                    style={getXpChangeStyle(event.xp_change)}
+                    style={getXpChangeStyle(getDisplayXp(event))}
                   >
-                    {event.xp_change > 0 ? '+' : ''}{event.xp_change} XP
+                    {getDisplayXp(event) > 0 ? '+' : ''}{getDisplayXp(event)} XP
                   </span>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
@@ -293,11 +311,14 @@ function CheckHistory() {
                       </div>
                       <div className="detail-item">
                         <span className="detail-label">XP Impact:</span>
-                        <span 
+                        <span
                           className="detail-value"
-                          style={getXpChangeStyle(event.xp_change)}
+                          style={getXpChangeStyle(getDisplayXp(event))}
                         >
-                          {event.xp_change > 0 ? '+' : ''}{event.xp_change}
+                          {getDisplayXp(event) > 0 ? '+' : ''}{getDisplayXp(event)}
+                          {gameModeEnabled && event.game_xp_change == null && (
+                            <span style={{ fontSize: '0.8em', color: '#999', marginLeft: '6px' }}>(pre-game mode)</span>
+                          )}
                         </span>
                       </div>
                     </div>
