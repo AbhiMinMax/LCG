@@ -84,6 +84,118 @@ function computeOppStreaks(oppId, sortedEvents /* newest first */) {
   return { attemptStreak, masteryStreak, failureRun, recoveryStreak, recoveryBest };
 }
 
+// ─── Boss computation ─────────────────────────────────────────────────────────
+// sorted = all events newest → oldest (pre-sorted by caller)
+// sitMap = { id → situation }
+function computeBosses(opportunities, sorted, sitMap) {
+  const isSuccess = v => v === 3 || v === 4;
+  const isFailure = v => v === 1 || v === 2;
+  const bosses = [];
+
+  // ── Situation bosses ──────────────────────────────────────────────────────
+  const seenSitIds = [...new Set(sorted.map(e => e.situation_id))];
+
+  for (const sitId of seenSitIds) {
+    const sit = sitMap[sitId];
+    if (!sit) continue;
+
+    const sitEvs = sorted.filter(e => e.situation_id === sitId);
+    if (sitEvs.length === 0) continue;
+
+    // Count consecutive successes at the head of history (newest → oldest)
+    let successStreak = 0;
+    for (const ev of sitEvs) {
+      if (isSuccess(ev.choice_value)) successStreak++;
+      else break;
+    }
+
+    // Count the failure run that immediately precedes the success streak
+    let failureRun = 0;
+    for (const ev of sitEvs.slice(successStreak)) {
+      if (isFailure(ev.choice_value)) failureRun++;
+      else break;
+    }
+
+    if (failureRun < 5) continue;   // Boss not triggered
+    if (successStreak >= 5) continue; // Boss dissolved — don't show
+
+    const state = successStreak >= 1 ? 'weakening' : 'active';
+
+    // Last success timestamp (for display and grip calculation)
+    const lastSuccessEv = sitEvs.find(e => isSuccess(e.choice_value));
+    const lastSuccessDaysAgo = lastSuccessEv
+      ? Math.floor((Date.now() - new Date(lastSuccessEv.timestamp).getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    // Grip: failure run magnitude + time pressure + difficulty
+    const diff = sit.challenging_level || 3;
+    const timePressure = lastSuccessDaysAgo !== null ? Math.min(lastSuccessDaysAgo * 0.5, 15) : 15;
+    const grip = failureRun * 1.5 + timePressure + (diff - 1) * 0.5;
+
+    // Resistance: recovery successes
+    const resistance = successStreak * 3;
+
+    bosses.push({
+      type: 'situation',
+      id: sitId,
+      title: sit.title,
+      state,
+      grip: Math.max(0.1, grip),
+      resistance: Math.max(0, resistance),
+      failureRun,
+      successStreak,
+      lastSuccessDaysAgo,
+    });
+  }
+
+  // ── Opportunity bosses ────────────────────────────────────────────────────
+  for (const opp of opportunities) {
+    const oppEvs = sorted.filter(
+      e => Array.isArray(e.affected_opportunities) && e.affected_opportunities.includes(opp.id)
+    );
+
+    if (oppEvs.length < 20) continue; // Need ≥ 20 events
+
+    const last20 = oppEvs.slice(0, 20);
+    const netXp = last20.reduce((s, e) => s + (e.game_xp_change || 0), 0);
+
+    if (netXp >= 0) continue; // Net positive — no boss
+
+    // Attempt streak for dissolution check (same 5+5 rule)
+    let successStreak = 0;
+    for (const ev of oppEvs) {
+      if (isSuccess(ev.choice_value)) successStreak++;
+      else break;
+    }
+    if (successStreak >= 10) continue; // Dissolved
+
+    const state = successStreak >= 5 ? 'weakening' : 'active';
+
+    const negXp = last20.reduce((s, e) => {
+      const gxp = e.game_xp_change || 0;
+      return gxp < 0 ? s + Math.abs(gxp) : s;
+    }, 0);
+    const posXp = last20.reduce((s, e) => {
+      const gxp = e.game_xp_change || 0;
+      return gxp > 0 ? s + gxp : s;
+    }, 0);
+
+    bosses.push({
+      type: 'opportunity',
+      id: opp.id,
+      title: opp.title,
+      state,
+      grip: Math.max(0.1, negXp),
+      resistance: Math.max(0, posXp),
+      netXp,
+      successStreak,
+      lastSuccessDaysAgo: null,
+    });
+  }
+
+  return bosses;
+}
+
 // ─── Compute all game-mode stats from raw DB rows ─────────────────────────────
 function computeGameStats(opportunities, events, situations) {
   const sitMap = Object.fromEntries(situations.map(s => [s.id, s]));
@@ -162,7 +274,96 @@ function computeGameStats(opportunities, events, situations) {
       levelInfo: getPathLevel(o.game_xp || 0, o.path || 'default'),
     }));
 
-  return { depthXP, archetype, top3, breadth: breadthSet.size, realStreak, badges, sortedOpps, oppStreaks };
+  const bosses = computeBosses(opportunities, sorted, sitMap);
+
+  return { depthXP, archetype, top3, breadth: breadthSet.size, realStreak, badges, sortedOpps, oppStreaks, bosses };
+}
+
+// ─── Tension meter ───────────────────────────────────────────────────────────
+// Amber grip from left, slate-blue resistance from right; ratio reflects dominance.
+const RES_COLOR = '#4a6fa5';
+
+function TensionMeter({ grip, resistance }) {
+  const total = Math.max(grip + resistance, 0.01);
+  const gripPct = Math.round((grip / total) * 100);
+  const resPct = 100 - gripPct;
+
+  return (
+    <div style={{ margin: '10px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', marginBottom: 4 }}>
+        <span style={{ color: GM.gold }}>Grip</span>
+        <span style={{ color: RES_COLOR }}>Resistance</span>
+      </div>
+      {/* Single bar: grip fills from left (amber), resistance from right (slate-blue) */}
+      <div style={{ height: 5, borderRadius: 3, overflow: 'hidden', display: 'flex', background: GM.bar }}>
+        <div style={{ width: `${gripPct}%`, background: GM.gold, transition: 'width 0.4s ease' }} />
+        <div style={{ width: `${resPct}%`, background: RES_COLOR, transition: 'width 0.4s ease', marginLeft: 'auto' }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Boss card ────────────────────────────────────────────────────────────────
+function BossCard({ boss }) {
+  const isWeakening = boss.state === 'weakening';
+
+  const subtitle = boss.type === 'situation'
+    ? `${boss.title} is winning.`
+    : `Your ${boss.title} is under pressure.`;
+
+  return (
+    <div
+      style={{
+        background: GM.bgDeep,
+        border: `1px solid rgba(200,168,75,${isWeakening ? '0.15' : '0.3'})`,
+        borderLeft: `3px solid ${isWeakening ? 'rgba(200,168,75,0.3)' : GM.gold}`,
+        borderRadius: 8,
+        padding: '13px 15px',
+        marginBottom: 10,
+        opacity: isWeakening ? 0.75 : 1,
+      }}
+    >
+      {/* Header */}
+      <div style={{ marginBottom: 2 }}>
+        <div style={{ fontWeight: 600, fontSize: '0.88rem', color: isWeakening ? GM.textDim : GM.text }}>
+          {subtitle}
+        </div>
+        <div style={{ fontSize: '0.7rem', color: GM.textDim, marginTop: 2 }}>
+          {boss.type === 'situation' ? 'Situation' : 'Opportunity'} boss
+          {isWeakening && (
+            <span style={{ marginLeft: 8, color: RES_COLOR }}>weakening</span>
+          )}
+        </div>
+      </div>
+
+      {/* Tension meter */}
+      <TensionMeter grip={boss.grip} resistance={boss.resistance} />
+
+      {/* Stats row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: GM.textDim, marginTop: 4 }}>
+        <span>
+          {boss.type === 'situation'
+            ? `Failure run: ${boss.failureRun}`
+            : `Net XP (last 20): ${boss.netXp}`}
+        </span>
+        {boss.type === 'situation' && boss.lastSuccessDaysAgo !== null && (
+          <span>
+            Last well done: {boss.lastSuccessDaysAgo === 0 ? 'today' : `${boss.lastSuccessDaysAgo}d ago`}
+          </span>
+        )}
+        {boss.type === 'situation' && boss.lastSuccessDaysAgo === null && (
+          <span>No successes yet</span>
+        )}
+      </div>
+
+      {/* Attempt streak (for context) */}
+      {boss.successStreak > 0 && (
+        <div style={{ fontSize: '0.7rem', color: RES_COLOR, marginTop: 5 }}>
+          ↑ {boss.successStreak} consecutive success{boss.successStreak !== 1 ? 'es' : ''} — keep going
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Character header ─────────────────────────────────────────────────────────
@@ -434,7 +635,7 @@ function GameProgress() {
     );
   }
 
-  const { depthXP, archetype, top3, breadth, realStreak, badges, sortedOpps, oppStreaks } = stats;
+  const { depthXP, archetype, top3, breadth, realStreak, badges, sortedOpps, oppStreaks, bosses } = stats;
 
   return (
     <div style={{ background: GM.bg, minHeight: '100vh', padding: '16px 16px 80px', boxSizing: 'border-box' }}>
@@ -470,14 +671,16 @@ function GameProgress() {
         )}
       </div>
 
-      {/* Section 3 — The Frontier (bosses and challenges added in later features) */}
-      {sortedOpps.length > 0 && (
+      {/* Section 3 — The Frontier */}
+      {bosses.length > 0 && (
         <div style={{
           marginTop: 28,
           borderTop: `1px solid ${GM.border}`,
           paddingTop: 20,
         }}>
-          {/* Boss encounters and random challenges will appear here */}
+          {bosses.map(boss => (
+            <BossCard key={`${boss.type}-${boss.id}`} boss={boss} />
+          ))}
         </div>
       )}
     </div>
