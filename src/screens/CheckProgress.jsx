@@ -166,7 +166,7 @@ function computeGameStats(opportunities, events, situations) {
 }
 
 // ─── Character header ─────────────────────────────────────────────────────────
-function CharacterHeader({ archetype, depthXP, badges, breadth, realStreak, top3, expanded, onToggle }) {
+function CharacterHeader({ archetype, depthXP, badges, breadth, realStreak, loginStreak, top3, expanded, onToggle }) {
   return (
     <div
       onClick={onToggle}
@@ -218,7 +218,7 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, realStreak, top3
       )}
 
       {/* Stats row */}
-      <div style={{ display: 'flex', gap: 20, marginTop: 12, fontSize: '0.8rem', color: GM.textDim }}>
+      <div style={{ display: 'flex', gap: 20, marginTop: 12, fontSize: '0.8rem', color: GM.textDim, flexWrap: 'wrap' }}>
         <span>
           Breadth: <strong style={{ color: GM.text }}>{breadth}</strong>
           <span style={{ fontSize: '0.7rem', marginLeft: 3 }}>this week</span>
@@ -226,6 +226,12 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, realStreak, top3
         {realStreak > 0 && (
           <span>
             Real: <strong style={{ color: GM.text }}>{realStreak}</strong>
+          </span>
+        )}
+        {loginStreak > 0 && (
+          <span>
+            Login: <strong style={{ color: loginStreak >= 7 ? GM.gold : GM.text }}>{loginStreak}</strong>
+            <span style={{ fontSize: '0.7rem', marginLeft: 3 }}>day{loginStreak !== 1 ? 's' : ''}</span>
           </span>
         )}
       </div>
@@ -392,8 +398,9 @@ function GameOppCard({ opp, expanded, onToggle, streaks }) {
 
 // ─── Game mode progress page ──────────────────────────────────────────────────
 function GameProgress() {
-  const [stats, setStats]           = useState(null);
-  const [loading, setLoading]       = useState(true);
+  const [stats, setStats]               = useState(null);
+  const [loginStreak, setLoginStreak]   = useState(0);
+  const [loading, setLoading]           = useState(true);
   const [expandedOpp, setExpandedOpp]   = useState(null);
   const [headerExpanded, setHeaderExpanded] = useState(false);
 
@@ -403,12 +410,14 @@ function GameProgress() {
         // Backfill game_xp for any events logged before game mode was enabled
         await dbHelpers.backfillGameXp();
 
-        const [opportunities, events, situations] = await Promise.all([
+        const [opportunities, events, situations, profile] = await Promise.all([
           db.opportunities.toArray(),
           db.events.toArray(),
           db.situations.toArray(),
+          dbHelpers.getGameProfile(),
         ]);
         setStats(computeGameStats(opportunities, events, situations));
+        setLoginStreak(profile.loginStreak || 0);
       } catch (error) {
         console.error('[GameProgress] loadData error:', error);
       } finally {
@@ -437,6 +446,7 @@ function GameProgress() {
         badges={badges}
         breadth={breadth}
         realStreak={realStreak}
+        loginStreak={loginStreak}
         top3={top3}
         expanded={headerExpanded}
         onToggle={() => setHeaderExpanded(e => !e)}

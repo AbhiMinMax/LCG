@@ -638,6 +638,104 @@ export const dbHelpers = {
     return xp;
   },
 
+  // ─── Login streak ──────────────────────────────────────────────────────────
+
+  // Read the stored game profile (no side effects).
+  async getGameProfile() {
+    return this.getConfig('gameProfile', {
+      loginStreak: 0,
+      lastLoginDate: null,
+      longestLoginStreak: 0,
+    });
+  },
+
+  // Check today's login. Updates streak, awards daily XP (1 per active opp)
+  // and milestone bonus XP. Safe to call multiple times per day — idempotent.
+  async checkLoginStreak() {
+    try {
+      const isGameMode = await this.getConfig('gameModeEnabled', false);
+      if (!isGameMode) return null;
+
+      const profile = await this.getGameProfile();
+      const today = new Date().toDateString(); // e.g. "Thu Apr 16 2026"
+
+      if (profile.lastLoginDate === today) {
+        // Already processed today — return current state without changes.
+        return {
+          loginStreak: profile.loginStreak,
+          longestLoginStreak: profile.longestLoginStreak,
+          milestoneHit: null,
+          milestoneXp: 0,
+          alreadyLoggedIn: true,
+        };
+      }
+
+      // Determine new streak value.
+      let newStreak;
+      if (profile.lastLoginDate) {
+        const diffDays = Math.round(
+          (new Date(today) - new Date(profile.lastLoginDate)) / (1000 * 60 * 60 * 24)
+        );
+        newStreak = diffDays === 1 ? (profile.loginStreak || 0) + 1 : 1;
+      } else {
+        newStreak = 1;
+      }
+
+      const newLongest = Math.max(newStreak, profile.longestLoginStreak || 0);
+
+      // Milestone bonus XP (awarded to every active opportunity).
+      const MILESTONES = { 7: 25, 30: 100, 100: 300, 365: 1000 };
+      const milestoneXp = MILESTONES[newStreak] || 0;
+      const milestoneHit = milestoneXp > 0 ? newStreak : null;
+
+      // Collect active opportunity IDs (at least one event in last 30 days).
+      const ms30 = 30 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const events = await db.events.toArray();
+      const activeOppIds = new Set();
+      for (const ev of events) {
+        if (
+          now - new Date(ev.timestamp).getTime() <= ms30 &&
+          Array.isArray(ev.affected_opportunities)
+        ) {
+          for (const id of ev.affected_opportunities) activeOppIds.add(id);
+        }
+      }
+
+      // Award 1 XP (daily) + milestone bonus to each active opportunity.
+      const xpPerOpp = 1 + milestoneXp;
+      if (activeOppIds.size > 0) {
+        const allOpps = await db.opportunities.toArray();
+        const oppUpdates = allOpps
+          .filter(o => activeOppIds.has(o.id))
+          .map(o => ({
+            key: o.id,
+            changes: { game_xp: Math.max(0, (o.game_xp || 0) + xpPerOpp) },
+          }));
+        if (oppUpdates.length > 0) {
+          await db.opportunities.bulkUpdate(oppUpdates);
+        }
+      }
+
+      // Persist updated profile.
+      await this.setConfig('gameProfile', {
+        ...profile,
+        loginStreak: newStreak,
+        lastLoginDate: today,
+        longestLoginStreak: newLongest,
+      });
+
+      console.log(
+        `[checkLoginStreak] streak=${newStreak} longest=${newLongest} milestone=${milestoneHit} xpPerOpp=${xpPerOpp} activeOpps=${activeOppIds.size}`
+      );
+
+      return { loginStreak: newStreak, longestLoginStreak: newLongest, milestoneHit, milestoneXp, alreadyLoggedIn: false };
+    } catch (error) {
+      console.error('[checkLoginStreak] error:', error);
+      return null;
+    }
+  },
+
   // Get configuration value
   async getConfig(key, defaultValue = null) {
     try {

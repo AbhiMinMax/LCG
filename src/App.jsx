@@ -7,7 +7,7 @@ import PWAUninstall from './components/PWAUninstall';
 import ThemeProvider from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import CloudSyncButton from './components/CloudSyncButton';
-import { ensureDefaultData } from './database/db';
+import { ensureDefaultData, dbHelpers } from './database/db';
 import AddEvent from './screens/AddEvent';
 import CheckProgress from './screens/CheckProgress';
 import CheckHistory from './screens/CheckHistory';
@@ -23,6 +23,8 @@ function AppContent() {
   useEffect(() => {
     // Ensure default data is available when the app starts
     ensureDefaultData();
+    // Record today's login and update streak / award XP (game mode only)
+    dbHelpers.checkLoginStreak().catch(err => console.error('[App] checkLoginStreak error:', err));
   }, []);
 
   const handleTitleClick = () => {
