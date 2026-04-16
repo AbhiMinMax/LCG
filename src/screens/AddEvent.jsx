@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { dbHelpers } from '../database/db';
 import { ThoughtPair } from '../components/ThoughtPassage';
-import { getPathLevel, getRebirthInfo, PATHS } from '../utils/pathUtils';
+import { getPathLevel, getRebirthInfo, PATHS, getRebirthSymbols, getNewRebirthSymbol } from '../utils/pathUtils';
 
 const CHOICE_OPTIONS = [
   { value: 1, label: 'Misguided Action', xp: -3, color: '#dc3545' },
@@ -543,13 +543,13 @@ function AddEvent() {
                   return (
                     <li key={opp.id}>
                       <strong>{opp.title}</strong>
-                      {rebNow > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{'★'.repeat(rebNow)}</span>}
+                      {rebNow > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebNow, pathKey)}</span>}
                       {' '}({lvNow.fullLabel}, {lvNow.xpIntoLevel}/{lvNow.xpForLevel} XP)
                       <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginTop: '2px' }}>
                         After: {lvNext.fullLabel}
-                        {rebNext > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{'★'.repeat(rebNext)}</span>}
+                        {rebNext > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebNext, pathKey)}</span>}
                         , {lvNext.xpIntoLevel}/{lvNext.xpForLevel} XP
-                        {rebirth && <span style={{ color: '#c8a84b', fontWeight: 'bold', marginLeft: '8px' }}>★ Rebirth!</span>}
+                        {rebirth && <span style={{ color: '#c8a84b', fontWeight: 'bold', marginLeft: '8px' }}>{getNewRebirthSymbol(rebNext, pathKey)} Rebirth!</span>}
                         {!rebirth && levelUp && <span style={{ color: '#28a745', fontWeight: 'bold', marginLeft: '8px' }}>↑ Level up!</span>}
                       </div>
                     </li>

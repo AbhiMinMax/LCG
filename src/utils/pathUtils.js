@@ -70,6 +70,41 @@ export const REBIRTH_XP = LEVEL_THRESHOLDS[20]; // 38600
 // game_xp at which path locks (level 3 threshold)
 export const PATH_LOCK_THRESHOLD = LEVEL_THRESHOLDS[2]; // 700
 
+// ─── Per-path rebirth symbols ─────────────────────────────────────────────────
+// Three tiers: first rebirth, second, third-and-beyond.
+// ★ is intentionally excluded — it is used elsewhere for mastery streaks.
+export const REBIRTH_SYMBOLS = {
+  default:    ['🔱', '💠', '👑'],
+  cognitive:  ['💡', '🔮', '🌌'],
+  emotional:  ['🌿', '🌸', '🦋'],
+  behavioral: ['⚡', '⚙️', '🏆'],
+  physical:   ['🔥', '🌊', '⚡'],
+};
+
+/**
+ * Returns the accumulated rebirth symbol string for display next to a label.
+ * Rebirths 1–3 show one new symbol each; beyond 3 all three symbols + ×N suffix.
+ * e.g. rebirths=2, path='cognitive' → '💡🔮'
+ */
+export function getRebirthSymbols(rebirths, path = 'default') {
+  if (!rebirths || rebirths <= 0) return '';
+  const syms = REBIRTH_SYMBOLS[path] || REBIRTH_SYMBOLS.default;
+  const show = Math.min(rebirths, 3);
+  let str = syms.slice(0, show).join('');
+  if (rebirths > 3) str += `×${rebirths}`;
+  return str;
+}
+
+/**
+ * Returns the single symbol earned at a specific rebirth count.
+ * Used for "Rebirth!" notifications to show what was just earned.
+ */
+export function getNewRebirthSymbol(rebirths, path = 'default') {
+  if (!rebirths || rebirths <= 0) return '';
+  const syms = REBIRTH_SYMBOLS[path] || REBIRTH_SYMBOLS.default;
+  return syms[Math.min(rebirths - 1, syms.length - 1)];
+}
+
 /**
  * Decompose total accumulated game XP into rebirth count and current-cycle XP.
  * rebirths — number of times the full path has been completed (each = one star)

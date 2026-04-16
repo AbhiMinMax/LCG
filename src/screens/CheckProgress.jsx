@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { dbHelpers, db } from '../database/db';
-import { PATHS, getPathLevel, getRebirthInfo } from '../utils/pathUtils';
+import { PATHS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
 import './ProgressStyles.css';
 
 // ─── Standard mode sort options ───────────────────────────────────────────────
@@ -426,7 +426,7 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, r
                 border: '1px solid rgba(200,168,75,0.2)',
               }}
             >
-              {pathInfo.icon} {opp.title} {'★'.repeat(rebirths)}
+              {pathInfo.icon} {opp.title} {getRebirthSymbols(rebirths, opp.path)}
             </span>
           ))}
         </div>
@@ -515,7 +515,7 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3 }) {
             <span style={{ fontWeight: 600, color: GM.text }}>{lvInfo.fullLabel}</span>
             {rebirths > 0 && (
               <span style={{ marginLeft: 6, color: GM.gold, fontSize: '0.8rem', letterSpacing: '0.05em' }}>
-                {'★'.repeat(rebirths)}
+                {getRebirthSymbols(rebirths, pathKey)}
               </span>
             )}
           </div>

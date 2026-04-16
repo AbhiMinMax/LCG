@@ -3,7 +3,7 @@ import { db, dbHelpers, ensureDefaultData } from '../database/db';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import { ThoughtPair } from '../components/ThoughtPassage';
-import { PATHS, PATH_KEYS, getPathLevel, getRebirthInfo } from '../utils/pathUtils';
+import { PATHS, PATH_KEYS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
 import './ProgressStyles.css';
 
 function Customize() {
@@ -1345,7 +1345,7 @@ function Customize() {
                               fontWeight: 600
                             }}>
                               {pathInfo.icon} {levelInfo.fullLabel}
-                              {rebirths > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{'★'.repeat(rebirths)}</span>}
+                              {rebirths > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebirths, opportunity.path)}</span>}
                             </span>
                             {opportunity.path_locked && (
                               <span style={{ fontSize: '0.72rem', color: 'var(--warning)' }}>🔒</span>
