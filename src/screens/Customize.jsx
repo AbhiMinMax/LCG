@@ -1385,7 +1385,7 @@ function Customize() {
                   </div>
                 </div>
                 
-                {opportunity.description ? <p className="item-description">{opportunity.description}</p> : null}
+                {opportunity.description ? <p className="item-description">{opportunity.description}</p> : ''}
                 
                 {opportunity.tags && opportunity.tags.length > 0 && (
                   <div style={{marginBottom: '12px'}}>
