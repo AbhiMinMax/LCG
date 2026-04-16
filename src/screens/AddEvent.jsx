@@ -550,23 +550,30 @@ function AddEvent() {
                         {rebNext > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebNext, pathKey)}</span>}
                         , {lvNext.xpIntoLevel}/{lvNext.xpForLevel} XP
                         {rebirth && <span style={{ color: '#c8a84b', fontWeight: 'bold', marginLeft: '8px' }}>{getNewRebirthSymbol(rebNext, pathKey)} Rebirth!</span>}
-                        {!rebirth && levelUp && <span style={{ color: '#28a745', fontWeight: 'bold', marginLeft: '8px' }}>↑ Level up!</span>}
+                        {levelUp && <span style={{ color: '#28a745', fontWeight: 'bold', marginLeft: '8px' }}>↑ Level up!</span>}
                       </div>
                     </li>
                   );
                 }
-                return (
-                  <li key={opp.id}>
-                    <strong>{opp.title}</strong> (Level {opp.current_level}, {opp.current_xp}/100 XP)
-                    <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      After: Level {opp.current_level},{' '}
-                      {Math.max(0, Math.min(100, opp.current_xp + getChoiceXp()))}/100 XP
-                      {opp.current_xp + getChoiceXp() >= 100 && (
-                        <span style={{ color: '#28a745', fontWeight: 'bold', marginLeft: '8px' }}>🎉 Level up!</span>
-                      )}
-                    </div>
-                  </li>
-                );
+                {(() => {
+                  let previewXp = Math.max(0, opp.current_xp + getChoiceXp());
+                  let previewLevel = opp.current_level;
+                  while (previewXp >= 100) { previewLevel++; previewXp -= 100; }
+                  const levelUps = previewLevel - opp.current_level;
+                  return (
+                    <li key={opp.id}>
+                      <strong>{opp.title}</strong> (Level {opp.current_level}, {opp.current_xp}/100 XP)
+                      <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        After: Level {previewLevel}, {previewXp}/100 XP
+                        {levelUps > 0 && (
+                          <span style={{ color: '#28a745', fontWeight: 'bold', marginLeft: '8px' }}>
+                            🎉 Level up{levelUps > 1 ? ` ×${levelUps}` : ''}!
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })()}
               })}
             </ul>
           </div>
