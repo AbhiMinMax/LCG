@@ -74,11 +74,11 @@ export const PATH_LOCK_THRESHOLD = LEVEL_THRESHOLDS[2]; // 700
 // Three tiers: first rebirth, second, third-and-beyond.
 // ★ is intentionally excluded — it is used elsewhere for mastery streaks.
 export const REBIRTH_SYMBOLS = {
-  default:    ['🔱', '💠', '👑'],
-  cognitive:  ['💡', '🔮', '🌌'],
-  emotional:  ['🌿', '🌸', '🦋'],
-  behavioral: ['⚡', '⚙️', '🏆'],
-  physical:   ['🔥', '🌊', '⚡'],
+  default:    ['🔱', '💠', '👑', '⚜️', '🎯', '🗝️'],
+  cognitive:  ['💡', '🔮', '🌌', '🧩', '🌀', '⚗️'],
+  emotional:  ['🌿', '🌸', '🦋', '🕊️', '💜', '🌈'],
+  behavioral: ['⚡', '⚙️', '🏆', '🎯', '🛡️', '🪨'],
+  physical:   ['🔥', '🌊', '⚡', '💥', '🦅', '⚔️'],
 };
 
 /**
@@ -89,9 +89,9 @@ export const REBIRTH_SYMBOLS = {
 export function getRebirthSymbols(rebirths, path = 'default') {
   if (!rebirths || rebirths <= 0) return '';
   const syms = REBIRTH_SYMBOLS[path] || REBIRTH_SYMBOLS.default;
-  const show = Math.min(rebirths, 3);
+  const show = Math.min(rebirths, 6);
   let str = syms.slice(0, show).join('');
-  if (rebirths > 3) str += `×${rebirths}`;
+  if (rebirths > 6) str += `×${rebirths}`;
   return str;
 }
 
@@ -102,7 +102,7 @@ export function getRebirthSymbols(rebirths, path = 'default') {
 export function getNewRebirthSymbol(rebirths, path = 'default') {
   if (!rebirths || rebirths <= 0) return '';
   const syms = REBIRTH_SYMBOLS[path] || REBIRTH_SYMBOLS.default;
-  return syms[Math.min(rebirths - 1, syms.length - 1)];
+  return syms[Math.min(rebirths - 1, 5)];
 }
 
 /**
