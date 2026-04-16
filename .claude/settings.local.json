@@ -21,7 +21,10 @@
       "Bash(git checkout:*)",
       "Bash(git merge:*)",
       "Bash(git branch:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npx vite:*)",
+      "Bash(node_modules\\\\.bin\\\\vite build:*)",
+      "Bash(./node_modules/.bin/vite build:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
