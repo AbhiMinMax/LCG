@@ -598,10 +598,15 @@ export const dbHelpers = {
       .toArray();
   },
 
-  // Game mode XP calculation (separate from standard mode XP)
-  // Difficulty multiplier applied first, then positive XP is doubled for real situations (isMeta = false)
-  // Negative XP gets the difficulty multiplier but is never doubled
-  calculateGameXpChange(choiceValue, isMeta = false, challengingLevel = 3) {
+  // Game mode XP calculation (separate from standard mode XP).
+  // Dynamic XP (difficulty multiplier) and game mode (real-event doubling) are
+  // independent features that can be enabled separately or together:
+  //   - isDynamicXp only  → difficulty multiplier applied, no doubling
+  //   - game mode only    → real-event doubling applied, no difficulty multiplier
+  //   - both              → difficulty multiplier first, then real-event doubling
+  //   - neither           → static base values (caller should use calculateXpChange instead)
+  // Negative XP (didnt_try, misguided) is never doubled regardless of flags.
+  calculateGameXpChange(choiceValue, isMeta = false, challengingLevel = 3, isDynamicXp = false) {
     const baseXpMap = {
       1: -5,  // Misguided Action
       2: -2,  // Didnt Try
@@ -609,8 +614,8 @@ export const dbHelpers = {
       4: 10,  // Well Done!
     };
     let xp = baseXpMap[choiceValue] ?? 0;
-    // Apply challenging level multiplier (same scale as dynamic XP: level 3 = 1x, minimum 1x)
-    if (challengingLevel) {
+    // Apply difficulty multiplier only when Dynamic XP is also enabled
+    if (isDynamicXp && challengingLevel) {
       const multiplier = Math.max(1.0, challengingLevel / 3);
       xp = Math.round(xp * multiplier);
     }
@@ -813,7 +818,7 @@ export const dbHelpers = {
     ]);
 
     const xpChange = this.calculateXpChange(choiceValue, challengingLevel, isDynamicXp);
-    const gameXpChange = isGameMode ? this.calculateGameXpChange(choiceValue, isMeta, challengingLevel) : null;
+    const gameXpChange = isGameMode ? this.calculateGameXpChange(choiceValue, isMeta, challengingLevel, isDynamicXp) : null;
 
     const opportunities = await this.getOpportunitiesForSituation(situationId);
     const affectedOpportunityIds = opportunities.map(opp => opp.id);

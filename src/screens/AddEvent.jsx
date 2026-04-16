@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { dbHelpers } from '../database/db';
 import { ThoughtPair } from '../components/ThoughtPassage';
+import { getPathLevel, getRebirthInfo, PATHS } from '../utils/pathUtils';
 
 const CHOICE_OPTIONS = [
   { value: 1, label: 'Misguided Action', xp: -3, color: '#dc3545' },
@@ -187,7 +188,8 @@ function AddEvent() {
 
     if (gameModeEnabled) {
       let base = GAME_BASE_XP[choice.value] ?? 0;
-      if (currentSituation && currentSituation.challenging_level) {
+      // Difficulty multiplier only when Dynamic XP is also enabled
+      if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
         const multiplier = Math.max(1.0, currentSituation.challenging_level / 3);
         base = Math.round(base * multiplier);
       }
@@ -197,13 +199,10 @@ function AddEvent() {
     }
 
     let xp = choice.xp;
-
-    // Apply dynamic XP calculation if enabled and we have a situation
     if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-      const multiplier = Math.max(1.0, currentSituation.challenging_level / 3); // Base level 3 = 1x, minimum 1x
+      const multiplier = Math.max(1.0, currentSituation.challenging_level / 3);
       xp = Math.round(xp * multiplier);
     }
-
     return xp;
   }, [selectedChoice, gameModeEnabled, dynamicXpEnabled, currentSituation]);
 
@@ -359,7 +358,8 @@ function AddEvent() {
                 let displayXp;
                 if (gameModeEnabled) {
                   let base = GAME_BASE_XP[choice.value] ?? 0;
-                  if (currentSituation && currentSituation.challenging_level) {
+                  // Difficulty multiplier only when Dynamic XP is also enabled
+                  if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
                     const multiplier = Math.max(1.0, currentSituation.challenging_level / 3);
                     base = Math.round(base * multiplier);
                   }
@@ -489,12 +489,12 @@ function AddEvent() {
                             <div key={event.id} style={{ borderLeft: `3px solid ${color}`, paddingLeft: '12px', fontSize: '0.9em' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                 <strong style={{ color }}>{event.title}</strong>
-                                <span style={{ color: event.xp_change >= 0 ? '#28a745' : '#dc3545', fontWeight: 600 }}>
-                                  {event.xp_change > 0 ? '+' : ''}{event.xp_change} XP
+                                <span style={{ color: (event.game_xp_change ?? event.xp_change) >= 0 ? '#28a745' : '#dc3545', fontWeight: 600 }}>
+                                  {(event.game_xp_change ?? event.xp_change) > 0 ? '+' : ''}{event.game_xp_change ?? event.xp_change} XP
                                 </span>
                               </div>
-                              <div style={{ color: '#666', marginBottom: '4px' }}>{formatEventDate(event.timestamp)}</div>
-                              <p style={{ margin: '4px 0', color: '#333' }}>{event.event_description}</p>
+                              <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>{formatEventDate(event.timestamp)}</div>
+                              <p style={{ margin: '4px 0', color: 'var(--text-primary)' }}>{event.event_description}</p>
                               {event.selected_back_thought && (
                                 <div style={{ fontSize: '0.85em', color: '#dc3545', marginTop: '4px' }}>
                                   Back thought: {event.selected_back_thought}
@@ -520,39 +520,54 @@ function AddEvent() {
         {affectedOpportunities.length > 0 && (
           <div className="card">
             <h3>🎯 Opportunities Affected</h3>
-            <p>
-              This event will {getChoiceXp() >= 0 ? 'add' : 'subtract'} <strong>{Math.abs(getChoiceXp())} XP</strong> to:
-              {dynamicXpEnabled ? (
-                currentSituation && currentSituation.challenging_level !== 3 && (
-                  <span style={{fontSize: '0.9em', color: '#666', marginLeft: '8px'}}>
-                    (Challenging Level {currentSituation.challenging_level}/5 applied)
-                  </span>
-                )
-              ) : (
-                <span style={{fontSize: '0.9em', color: '#999', marginLeft: '8px'}}>
-                  (Base XP - Dynamic XP disabled)
+            <p style={{ marginBottom: 8 }}>
+              This event will {getChoiceXp() >= 0 ? 'add' : 'subtract'}{' '}
+              <strong>{Math.abs(getChoiceXp())} {gameModeEnabled ? 'game ' : ''}XP</strong> to each:
+              {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
+                <span style={{ fontSize: '0.9em', color: 'var(--text-secondary)', marginLeft: '8px' }}>
+                  (difficulty ×{Math.max(1.0, currentSituation.challenging_level / 3).toFixed(1)} applied)
                 </span>
               )}
             </p>
             <ul>
-              {affectedOpportunities.map(opp => (
-                <li key={opp.id}>
-                  <strong>{opp.title}</strong> (Level {opp.current_level}, {opp.current_xp}/100 XP)
-                  <div style={{fontSize: '0.85em', color: '#666', marginTop: '2px'}}>
-                    After this event: Level {opp.current_level}, {Math.max(0, Math.min(100, opp.current_xp + getChoiceXp()))}/100 XP
-                    {opp.current_xp + getChoiceXp() >= 100 && (
-                      <span style={{color: '#28a745', fontWeight: 'bold', marginLeft: '8px'}}>
-                        🎉 LEVEL UP!
-                      </span>
-                    )}
-                  </div>
-                  {opp.tags && opp.tags.length > 0 && (
-                    <div style={{fontSize: '0.8em', color: '#999', marginTop: '2px'}}>
-                      Tags: {opp.tags.join(', ')}
+              {affectedOpportunities.map(opp => {
+                if (gameModeEnabled) {
+                  const pathKey = opp.path || 'default';
+                  const lvNow  = getPathLevel(opp.game_xp || 0, pathKey);
+                  const { rebirths: rebNow } = getRebirthInfo(opp.game_xp || 0);
+                  const newGameXp = Math.max(0, (opp.game_xp || 0) + getChoiceXp());
+                  const lvNext = getPathLevel(newGameXp, pathKey);
+                  const { rebirths: rebNext } = getRebirthInfo(newGameXp);
+                  const levelUp  = lvNext.level !== lvNow.level || rebNext !== rebNow;
+                  const rebirth  = rebNext > rebNow;
+                  return (
+                    <li key={opp.id}>
+                      <strong>{opp.title}</strong>
+                      {rebNow > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{'★'.repeat(rebNow)}</span>}
+                      {' '}({lvNow.fullLabel}, {lvNow.xpIntoLevel}/{lvNow.xpForLevel} XP)
+                      <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        After: {lvNext.fullLabel}
+                        {rebNext > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{'★'.repeat(rebNext)}</span>}
+                        , {lvNext.xpIntoLevel}/{lvNext.xpForLevel} XP
+                        {rebirth && <span style={{ color: '#c8a84b', fontWeight: 'bold', marginLeft: '8px' }}>★ Rebirth!</span>}
+                        {!rebirth && levelUp && <span style={{ color: '#28a745', fontWeight: 'bold', marginLeft: '8px' }}>↑ Level up!</span>}
+                      </div>
+                    </li>
+                  );
+                }
+                return (
+                  <li key={opp.id}>
+                    <strong>{opp.title}</strong> (Level {opp.current_level}, {opp.current_xp}/100 XP)
+                    <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      After: Level {opp.current_level},{' '}
+                      {Math.max(0, Math.min(100, opp.current_xp + getChoiceXp()))}/100 XP
+                      {opp.current_xp + getChoiceXp() >= 100 && (
+                        <span style={{ color: '#28a745', fontWeight: 'bold', marginLeft: '8px' }}>🎉 Level up!</span>
+                      )}
                     </div>
-                  )}
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}

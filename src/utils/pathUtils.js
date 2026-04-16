@@ -63,85 +63,78 @@ export const LEVEL_THRESHOLDS = [
   38600,  // level 21  ← prestige entry
 ];
 
-// XP needed to earn one prestige sub-level after reaching level 21
-export const PRESTIGE_SUB_XP = 500;
+// Total game XP that constitutes one full path cycle (entering level 21 = Mastered III)
+// Reaching this threshold earns one rebirth star and resets the cycle.
+export const REBIRTH_XP = LEVEL_THRESHOLDS[20]; // 38600
 
 // game_xp at which path locks (level 3 threshold)
 export const PATH_LOCK_THRESHOLD = LEVEL_THRESHOLDS[2]; // 700
 
 /**
+ * Decompose total accumulated game XP into rebirth count and current-cycle XP.
+ * rebirths — number of times the full path has been completed (each = one star)
+ * cycleXp  — XP within the current cycle (0 to REBIRTH_XP - 1)
+ */
+export function getRebirthInfo(gameXp) {
+  const xp = Math.max(0, gameXp || 0);
+  const rebirths = Math.floor(xp / REBIRTH_XP);
+  const cycleXp  = xp % REBIRTH_XP;
+  return { rebirths, cycleXp };
+}
+
+/**
  * Compute path level info from accumulated game XP.
+ *
+ * Uses cycleXp (game_xp % REBIRTH_XP) for level position so the path
+ * resets to level 1 after each rebirth.
+ *
  * Returns:
- *   level         — 1-21 (capped at 21 in prestige)
- *   labelIndex    — 0-6 (index into path labels array)
- *   roman         — 'I' | 'II' | 'III'
- *   label         — e.g. 'Aware'
- *   fullLabel     — e.g. 'Aware I'
- *   xpIntoLevel   — XP earned within current level
- *   xpForLevel    — total XP needed for current level
- *   progressPct   — 0-100 percentage through current level
- *   isPrestige    — boolean
- *   prestigeSub   — sub-level number (1+ when prestige, null otherwise)
- *   nextLabel     — full label of next level, or null if prestige
- *   xpToNext      — XP remaining until next level, or null if prestige
+ *   level       — 1-21 within the current cycle
+ *   labelIndex  — 0-6 (index into path labels array)
+ *   roman       — 'I' | 'II' | 'III'
+ *   label       — e.g. 'Aware'
+ *   fullLabel   — e.g. 'Aware I'
+ *   xpIntoLevel — XP earned within current level
+ *   xpForLevel  — total XP span of current level
+ *   progressPct — 0-100 percentage through current level
+ *   rebirths    — number of completed full cycles (shown as stars)
+ *   nextLabel   — full label of next level, or null at cycle cap
+ *   xpToNext    — XP to next level, or null at cycle cap
+ *   isPrestige  — always false (kept for call-site compatibility)
  */
 export function getPathLevel(gameXp, path = 'default') {
-  const xp = Math.max(0, gameXp || 0);
+  const { rebirths, cycleXp } = getRebirthInfo(gameXp);
+  const xp = cycleXp;
   const labels = PATHS[path]?.labels || PATHS.default.labels;
 
-  // Determine which level (1-21) we're in
+  // Determine which level (1-21) within this cycle
   let level = 1;
   for (let i = 1; i < LEVEL_THRESHOLDS.length; i++) {
-    if (xp >= LEVEL_THRESHOLDS[i]) {
-      level = i + 1;
-    } else {
-      break;
-    }
+    if (xp >= LEVEL_THRESHOLDS[i]) level = i + 1;
+    else break;
   }
-
-  const isPrestige = level > 21;
-
-  if (isPrestige) {
-    const prestigeXp = xp - LEVEL_THRESHOLDS[20];
-    const prestigeSub = Math.floor(prestigeXp / PRESTIGE_SUB_XP) + 1;
-    const xpIntoLevel = prestigeXp % PRESTIGE_SUB_XP;
-    return {
-      level: 21,
-      labelIndex: 6,
-      roman: 'III',
-      label: labels[6],
-      fullLabel: `${labels[6]} III`,
-      xpIntoLevel,
-      xpForLevel: PRESTIGE_SUB_XP,
-      progressPct: Math.round((xpIntoLevel / PRESTIGE_SUB_XP) * 100),
-      isPrestige: true,
-      prestigeSub,
-      nextLabel: null,
-      xpToNext: null,
-    };
-  }
+  // Cap at 21 — cycle resets before level can exceed 21
+  if (level > 21) level = 21;
 
   const labelIndex = Math.floor((level - 1) / 3); // 0-6
   const romanIndex = (level - 1) % 3;              // 0-2
-  const roman = ROMAN[romanIndex];
-  const label = labels[labelIndex];
-  const fullLabel = `${label} ${roman}`;
+  const roman      = ROMAN[romanIndex];
+  const label      = labels[labelIndex];
+  const fullLabel  = `${label} ${roman}`;
 
-  const xpStart = LEVEL_THRESHOLDS[level - 1];
-  const xpEnd = level < 21 ? LEVEL_THRESHOLDS[level] : LEVEL_THRESHOLDS[20] + PRESTIGE_SUB_XP;
-  const xpForLevel = xpEnd - xpStart;
+  const xpStart   = LEVEL_THRESHOLDS[level - 1];
+  // Level 21 spans from its threshold to REBIRTH_XP (end of cycle)
+  const xpEnd     = level < 21 ? LEVEL_THRESHOLDS[level] : REBIRTH_XP;
+  const xpForLevel  = xpEnd - xpStart;
   const xpIntoLevel = xp - xpStart;
-  const xpToNext = xpForLevel - xpIntoLevel;
+  const xpToNext    = level < 21 ? xpForLevel - xpIntoLevel : null;
 
-  // Next level label
+  // Next level label (null when at the cap of this cycle)
   let nextLabel = null;
   if (level < 21) {
-    const nextLevelIndex = level; // 0-based = level (since level is 1-based)
-    const nextLabelIndex = Math.floor(nextLevelIndex / 3);
-    const nextRomanIndex = nextLevelIndex % 3;
+    const nextLabelIndex = Math.floor(level / 3);
+    const nextRomanIndex = level % 3;
     nextLabel = `${labels[nextLabelIndex]} ${ROMAN[nextRomanIndex]}`;
-  } else {
-    nextLabel = `${labels[6]} III — sub 1`;
   }
 
   return {
@@ -152,10 +145,10 @@ export function getPathLevel(gameXp, path = 'default') {
     fullLabel,
     xpIntoLevel,
     xpForLevel,
-    progressPct: Math.round((xpIntoLevel / xpForLevel) * 100),
-    isPrestige: false,
-    prestigeSub: null,
+    progressPct: xpForLevel > 0 ? Math.round((xpIntoLevel / xpForLevel) * 100) : 100,
+    rebirths,
     nextLabel,
     xpToNext,
+    isPrestige: false, // kept for compatibility; rebirth stars replace prestige
   };
 }

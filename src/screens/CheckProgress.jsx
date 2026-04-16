@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { dbHelpers, db } from '../database/db';
-import { PATHS, getPathLevel } from '../utils/pathUtils';
+import { PATHS, getPathLevel, getRebirthInfo } from '../utils/pathUtils';
 import './ProgressStyles.css';
 
 // ─── Standard mode sort options ───────────────────────────────────────────────
@@ -85,9 +85,10 @@ function computeOppStreaks(oppId, sortedEvents /* newest first */) {
 }
 
 // ─── Boss computation ─────────────────────────────────────────────────────────
-// sorted = all events newest → oldest (pre-sorted by caller)
-// sitMap = { id → situation }
-function computeBosses(opportunities, sorted, sitMap) {
+// sorted        = all events newest → oldest (pre-sorted by caller)
+// sitMap        = { id → situation }
+// failThreshold = consecutive failures needed to spawn a situation boss (default 5)
+function computeBosses(opportunities, sorted, sitMap, failThreshold = 5) {
   const isSuccess = v => v === 3 || v === 4;
   const isFailure = v => v === 1 || v === 2;
   const bosses = [];
@@ -116,7 +117,7 @@ function computeBosses(opportunities, sorted, sitMap) {
       else break;
     }
 
-    if (failureRun < 5) continue;   // Boss not triggered
+    if (failureRun < failThreshold) continue;   // Boss not triggered
     if (successStreak >= 5) continue; // Boss dissolved — don't show
 
     const state = successStreak >= 1 ? 'weakening' : 'active';
@@ -197,7 +198,7 @@ function computeBosses(opportunities, sorted, sitMap) {
 }
 
 // ─── Compute all game-mode stats from raw DB rows ─────────────────────────────
-function computeGameStats(opportunities, events, situations) {
+function computeGameStats(opportunities, events, situations, bossFailThreshold = 5) {
   const sitMap = Object.fromEntries(situations.map(s => [s.id, s]));
   const now = Date.now();
   const ms30 = 30 * 24 * 60 * 60 * 1000;
@@ -265,16 +266,17 @@ function computeGameStats(opportunities, events, situations) {
     (lastActive[a.id] || new Date(a.created_at).getTime())
   );
 
-  // Meta-skill badges: opportunities that reached prestige
+  // Meta-skill badges: opportunities that have completed at least one full cycle (rebirth ≥ 1)
   const badges = opportunities
-    .filter(o => getPathLevel(o.game_xp || 0, o.path || 'default').isPrestige)
+    .filter(o => getRebirthInfo(o.game_xp || 0).rebirths >= 1)
     .map(o => ({
       opp: o,
       pathInfo: PATHS[o.path || 'default'],
       levelInfo: getPathLevel(o.game_xp || 0, o.path || 'default'),
+      rebirths: getRebirthInfo(o.game_xp || 0).rebirths,
     }));
 
-  const bosses = computeBosses(opportunities, sorted, sitMap);
+  const bosses = computeBosses(opportunities, sorted, sitMap, bossFailThreshold);
 
   return { depthXP, archetype, top3, breadth: breadthSet.size, realStreak, badges, sortedOpps, oppStreaks, bosses };
 }
@@ -398,7 +400,7 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, realStreak, logi
       {/* Meta-skill badges */}
       {badges.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginTop: 12, overflowX: 'auto', paddingBottom: 2 }}>
-          {badges.map(({ opp, pathInfo, levelInfo }) => (
+          {badges.map(({ opp, pathInfo, levelInfo, rebirths }) => (
             <span
               key={opp.id}
               style={{
@@ -412,7 +414,7 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, realStreak, logi
                 border: '1px solid rgba(200,168,75,0.2)',
               }}
             >
-              {pathInfo.icon} {opp.title} — {levelInfo.fullLabel}
+              {pathInfo.icon} {opp.title} {'★'.repeat(rebirths)}
             </span>
           ))}
         </div>
@@ -463,10 +465,11 @@ function GameOppCard({ opp, expanded, onToggle, streaks }) {
   const pathKey  = opp.path || 'default';
   const pathInfo = PATHS[pathKey];
   const lvInfo   = getPathLevel(opp.game_xp || 0, pathKey);
+  const { rebirths } = getRebirthInfo(opp.game_xp || 0);
   const barPct   = lvInfo.xpForLevel > 0
     ? Math.round((lvInfo.xpIntoLevel / lvInfo.xpForLevel) * 100)
     : 100;
-  const barColor = lvInfo.isPrestige ? GM.gold : GM.accent;
+  const barColor = rebirths > 0 ? GM.gold : GM.accent;
   const { attemptStreak = 0, masteryStreak = 0, failureRun = 0, recoveryStreak = 0, recoveryBest = 0 } = streaks || {};
 
   return (
@@ -498,9 +501,9 @@ function GameOppCard({ opp, expanded, onToggle, streaks }) {
             {pathInfo.name}
             <span style={{ margin: '0 5px', opacity: 0.4 }}>·</span>
             <span style={{ fontWeight: 600, color: GM.text }}>{lvInfo.fullLabel}</span>
-            {lvInfo.isPrestige && (
-              <span style={{ marginLeft: 6, color: GM.gold, fontSize: '0.72rem' }}>
-                sub {lvInfo.prestigeSub}
+            {rebirths > 0 && (
+              <span style={{ marginLeft: 6, color: GM.gold, fontSize: '0.8rem', letterSpacing: '0.05em' }}>
+                {'★'.repeat(rebirths)}
               </span>
             )}
           </div>
@@ -611,13 +614,14 @@ function GameProgress() {
         // Backfill game_xp for any events logged before game mode was enabled
         await dbHelpers.backfillGameXp();
 
-        const [opportunities, events, situations, profile] = await Promise.all([
+        const [opportunities, events, situations, profile, bossThreshold] = await Promise.all([
           db.opportunities.toArray(),
           db.events.toArray(),
           db.situations.toArray(),
           dbHelpers.getGameProfile(),
+          dbHelpers.getConfig('situationBossThreshold', 5),
         ]);
-        setStats(computeGameStats(opportunities, events, situations));
+        setStats(computeGameStats(opportunities, events, situations, bossThreshold));
         setLoginStreak(profile.loginStreak || 0);
       } catch (error) {
         console.error('[GameProgress] loadData error:', error);

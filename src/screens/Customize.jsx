@@ -3,7 +3,7 @@ import { db, dbHelpers, ensureDefaultData } from '../database/db';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import { ThoughtPair } from '../components/ThoughtPassage';
-import { PATHS, PATH_KEYS, getPathLevel } from '../utils/pathUtils';
+import { PATHS, PATH_KEYS, getPathLevel, getRebirthInfo } from '../utils/pathUtils';
 import './ProgressStyles.css';
 
 function Customize() {
@@ -30,6 +30,7 @@ function Customize() {
   const [filterOpportunityHasEvents, setFilterOpportunityHasEvents] = useState(false);
   const [eventCountsPerSit, setEventCountsPerSit] = useState({});
   const [eventCountsPerOpp, setEventCountsPerOpp] = useState({});
+  const [oppLinkedSits, setOppLinkedSits] = useState({}); // oppId → [situation title strings]
   
   // Export/Import states
   const [dataStats, setDataStats] = useState(null);
@@ -42,6 +43,7 @@ function Customize() {
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
   const [ensuringDefaults, setEnsuringDefaults] = useState(false);
+  const [situationBossThreshold, setSituationBossThreshold] = useState(5);
   
   // Form states
   const [showSituationForm, setShowSituationForm] = useState(false);
@@ -75,16 +77,28 @@ function Customize() {
 
   const loadConfig = async () => {
     try {
-      const [dynamicXp, cloudSync, gameMode] = await Promise.all([
+      const [dynamicXp, cloudSync, gameMode, bossThreshold] = await Promise.all([
         dbHelpers.getConfig('dynamicXpEnabled', false),
         dbHelpers.getConfig('cloudSyncEnabled', false),
         dbHelpers.getConfig('gameModeEnabled', false),
+        dbHelpers.getConfig('situationBossThreshold', 5),
       ]);
       setDynamicXpEnabled(dynamicXp);
       setCloudSyncEnabled(cloudSync);
       setGameModeEnabled(gameMode);
+      setSituationBossThreshold(bossThreshold);
     } catch (error) {
       console.error('Error loading config:', error);
+    }
+  };
+
+  const handleBossThresholdChange = async (val) => {
+    const n = Math.max(3, Math.min(20, parseInt(val) || 5));
+    setSituationBossThreshold(n);
+    try {
+      await dbHelpers.setConfig('situationBossThreshold', n);
+    } catch (error) {
+      console.error('Error saving boss threshold:', error);
     }
   };
 
@@ -172,13 +186,14 @@ function Customize() {
 
   const loadData = async () => {
     try {
-      const [situationsData, opportunitiesData, sitTags, oppTags, sitCounts, oppCounts] = await Promise.all([
+      const [situationsData, opportunitiesData, sitTags, oppTags, sitCounts, oppCounts, links] = await Promise.all([
         dbHelpers.getSituationsWithOpportunities(),
         db.opportunities.toArray(),
         dbHelpers.getAllSituationTags(),
         dbHelpers.getAllOpportunityTags(),
         dbHelpers.getEventCountsPerSituation(),
-        dbHelpers.getEventCountsPerOpportunity()
+        dbHelpers.getEventCountsPerOpportunity(),
+        db.situation_opportunities.toArray(),
       ]);
       setAllSituations(situationsData);
       setSituations(situationsData);
@@ -188,6 +203,16 @@ function Customize() {
       setAvailableOpportunityTags(oppTags);
       setEventCountsPerSit(sitCounts);
       setEventCountsPerOpp(oppCounts);
+
+      // Build oppId → [situation title] map for linked situations display
+      const sitTitleMap = Object.fromEntries(situationsData.map(s => [s.id, s.title]));
+      const linked = {};
+      for (const link of links) {
+        if (!linked[link.opportunity_id]) linked[link.opportunity_id] = [];
+        const title = sitTitleMap[link.situation_id];
+        if (title) linked[link.opportunity_id].push(title);
+      }
+      setOppLinkedSits(linked);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -1289,6 +1314,7 @@ function Customize() {
                         const pathKey = opportunity.path || 'default';
                         const pathInfo = PATHS[pathKey];
                         const levelInfo = getPathLevel(opportunity.game_xp || 0, pathKey);
+                        const { rebirths } = getRebirthInfo(opportunity.game_xp || 0);
                         return (
                           <>
                             <span style={{
@@ -1299,7 +1325,8 @@ function Customize() {
                               fontSize: '0.75rem',
                               fontWeight: 600
                             }}>
-                              {pathInfo.icon} {levelInfo.fullLabel}{levelInfo.isPrestige ? ` — sub ${levelInfo.prestigeSub}` : ''}
+                              {pathInfo.icon} {levelInfo.fullLabel}
+                              {rebirths > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{'★'.repeat(rebirths)}</span>}
                             </span>
                             {opportunity.path_locked && (
                               <span style={{ fontSize: '0.72rem', color: 'var(--warning)' }}>🔒</span>
@@ -1361,8 +1388,29 @@ function Customize() {
                   </div>
                 )}
                 
+                {/* Linked situations */}
+                {(oppLinkedSits[opportunity.id] || []).length > 0 && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Linked situations:</strong>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                      {(oppLinkedSits[opportunity.id] || []).map(title => (
+                        <span key={title} style={{
+                          display: 'inline-block',
+                          background: 'rgba(40,167,69,0.12)',
+                          color: 'var(--success, #28a745)',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                        }}>
+                          {title}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="progress-bar">
-                  <div 
+                  <div
                     className="progress-fill"
                     style={{ width: `${opportunity.current_xp}%` }}
                   />
@@ -1431,6 +1479,45 @@ function Customize() {
                 }
               </p>
             </div>
+
+            {gameModeEnabled && (
+              <div style={{
+                padding: '15px',
+                background: 'var(--bg-tertiary)',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <h4 style={{margin: '0 0 12px 0', fontSize: '1rem'}}>⚔️ Game Mode: Streak Config</h4>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '0.95rem', color: 'var(--text-primary)', flex: 1 }}>
+                    Situation boss triggers after
+                    <input
+                      type="number"
+                      min="3"
+                      max="20"
+                      value={situationBossThreshold}
+                      onChange={e => handleBossThresholdChange(e.target.value)}
+                      style={{
+                        width: '52px',
+                        marginLeft: '8px',
+                        marginRight: '8px',
+                        padding: '4px 6px',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '4px',
+                        background: 'var(--bg-primary)',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.95rem',
+                        textAlign: 'center',
+                      }}
+                    />
+                    consecutive failures
+                  </label>
+                </div>
+                <p style={{ margin: '0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  Range 3–20. Default is 5.
+                </p>
+              </div>
+            )}
 
             <div style={{
               padding: '15px',
