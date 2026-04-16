@@ -44,6 +44,10 @@ function Customize() {
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
   const [ensuringDefaults, setEnsuringDefaults] = useState(false);
   const [situationBossThreshold, setSituationBossThreshold] = useState(5);
+  const [bossDissolutionThreshold, setBossDissolutionThreshold] = useState(5);
+  const [breadthWeeklyTarget, setBreadthWeeklyTarget] = useState(7);
+  const [masteryStreakMinDisplay, setMasteryStreakMinDisplay] = useState(3);
+  const [opportunityBossWindow, setOpportunityBossWindow] = useState(20);
   
   // Form states
   const [showSituationForm, setShowSituationForm] = useState(false);
@@ -77,30 +81,45 @@ function Customize() {
 
   const loadConfig = async () => {
     try {
-      const [dynamicXp, cloudSync, gameMode, bossThreshold] = await Promise.all([
+      const [dynamicXp, cloudSync, gameMode, sitBoss, bossDiss, breadth, mastery, oppBoss] = await Promise.all([
         dbHelpers.getConfig('dynamicXpEnabled', false),
         dbHelpers.getConfig('cloudSyncEnabled', false),
         dbHelpers.getConfig('gameModeEnabled', false),
         dbHelpers.getConfig('situationBossThreshold', 5),
+        dbHelpers.getConfig('bossDissolutionThreshold', 5),
+        dbHelpers.getConfig('breadthWeeklyTarget', 7),
+        dbHelpers.getConfig('masteryStreakMinDisplay', 3),
+        dbHelpers.getConfig('opportunityBossWindow', 20),
       ]);
       setDynamicXpEnabled(dynamicXp);
       setCloudSyncEnabled(cloudSync);
       setGameModeEnabled(gameMode);
-      setSituationBossThreshold(bossThreshold);
+      setSituationBossThreshold(sitBoss);
+      setBossDissolutionThreshold(bossDiss);
+      setBreadthWeeklyTarget(breadth);
+      setMasteryStreakMinDisplay(mastery);
+      setOpportunityBossWindow(oppBoss);
     } catch (error) {
       console.error('Error loading config:', error);
     }
   };
 
-  const handleBossThresholdChange = async (val) => {
-    const n = Math.max(3, Math.min(20, parseInt(val) || 5));
-    setSituationBossThreshold(n);
+  // Generic config number saver — clamps to [min, max], persists to DB
+  const saveNumConfig = async (key, val, min, max, defaultVal, setter) => {
+    const n = Math.max(min, Math.min(max, parseInt(val) || defaultVal));
+    setter(n);
     try {
-      await dbHelpers.setConfig('situationBossThreshold', n);
+      await dbHelpers.setConfig(key, n);
     } catch (error) {
-      console.error('Error saving boss threshold:', error);
+      console.error(`Error saving config ${key}:`, error);
     }
   };
+
+  const handleBossThresholdChange      = v => saveNumConfig('situationBossThreshold', v, 3, 20, 5,  setSituationBossThreshold);
+  const handleBossDissolutionChange    = v => saveNumConfig('bossDissolutionThreshold', v, 2, 15, 5, setBossDissolutionThreshold);
+  const handleBreadthTargetChange      = v => saveNumConfig('breadthWeeklyTarget', v, 2, 14, 7,  setBreadthWeeklyTarget);
+  const handleMasteryMinDisplayChange  = v => saveNumConfig('masteryStreakMinDisplay', v, 1, 10, 3, setMasteryStreakMinDisplay);
+  const handleOppBossWindowChange      = v => saveNumConfig('opportunityBossWindow', v, 5, 50, 20, setOpportunityBossWindow);
 
   useEffect(() => {
     const filterAndSortSituations = () => {
@@ -1487,35 +1506,59 @@ function Customize() {
                 borderRadius: '8px',
                 marginBottom: '20px'
               }}>
-                <h4 style={{margin: '0 0 12px 0', fontSize: '1rem'}}>⚔️ Game Mode: Streak Config</h4>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <label style={{ fontSize: '0.95rem', color: 'var(--text-primary)', flex: 1 }}>
-                    Situation boss triggers after
-                    <input
-                      type="number"
-                      min="3"
-                      max="20"
-                      value={situationBossThreshold}
-                      onChange={e => handleBossThresholdChange(e.target.value)}
-                      style={{
-                        width: '52px',
-                        marginLeft: '8px',
-                        marginRight: '8px',
-                        padding: '4px 6px',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '4px',
-                        background: 'var(--bg-primary)',
-                        color: 'var(--text-primary)',
-                        fontSize: '0.95rem',
-                        textAlign: 'center',
-                      }}
-                    />
-                    consecutive failures
-                  </label>
-                </div>
-                <p style={{ margin: '0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Range 3–20. Default is 5.
-                </p>
+                <h4 style={{margin: '0 0 14px 0', fontSize: '1rem'}}>⚔️ Game Mode: Streak Config</h4>
+                {[
+                  {
+                    label: 'Situation boss triggers after', suffix: 'consecutive failures',
+                    value: situationBossThreshold, onChange: handleBossThresholdChange,
+                    min: 3, max: 20, hint: 'Default 5',
+                  },
+                  {
+                    label: 'Boss dissolves after', suffix: 'consecutive successes',
+                    value: bossDissolutionThreshold, onChange: handleBossDissolutionChange,
+                    min: 2, max: 15, hint: 'Default 5',
+                  },
+                  {
+                    label: 'Breadth bonus when', suffix: 'distinct situations handled in a week',
+                    value: breadthWeeklyTarget, onChange: handleBreadthTargetChange,
+                    min: 2, max: 14, hint: 'Default 7',
+                  },
+                  {
+                    label: 'Show mastery streak only when ≥', suffix: '',
+                    value: masteryStreakMinDisplay, onChange: handleMasteryMinDisplayChange,
+                    min: 1, max: 10, hint: 'Default 3',
+                  },
+                  {
+                    label: 'Opportunity boss looks back', suffix: 'events for XP trend',
+                    value: opportunityBossWindow, onChange: handleOppBossWindowChange,
+                    min: 5, max: 50, hint: 'Default 20',
+                  },
+                ].map(({ label, suffix, value, onChange, min, max, hint }) => (
+                  <div key={label} style={{ marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                      <span>{label}</span>
+                      <input
+                        type="number"
+                        min={min}
+                        max={max}
+                        value={value}
+                        onChange={e => onChange(e.target.value)}
+                        style={{
+                          width: '56px',
+                          padding: '3px 6px',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          background: 'var(--bg-primary)',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.9rem',
+                          textAlign: 'center',
+                        }}
+                      />
+                      {suffix && <span>{suffix}</span>}
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: 4 }}>({hint}, range {min}–{max})</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 

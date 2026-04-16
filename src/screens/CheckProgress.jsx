@@ -87,8 +87,10 @@ function computeOppStreaks(oppId, sortedEvents /* newest first */) {
 // ─── Boss computation ─────────────────────────────────────────────────────────
 // sorted        = all events newest → oldest (pre-sorted by caller)
 // sitMap        = { id → situation }
-// failThreshold = consecutive failures needed to spawn a situation boss (default 5)
-function computeBosses(opportunities, sorted, sitMap, failThreshold = 5) {
+// failThreshold = consecutive failures to spawn a situation boss (default 5)
+// dissThreshold = consecutive successes to dissolve a boss (default 5)
+// oppWindow     = events to look back for opportunity boss XP trend (default 20)
+function computeBosses(opportunities, sorted, sitMap, failThreshold = 5, dissThreshold = 5, oppWindow = 20) {
   const isSuccess = v => v === 3 || v === 4;
   const isFailure = v => v === 1 || v === 2;
   const bosses = [];
@@ -117,8 +119,8 @@ function computeBosses(opportunities, sorted, sitMap, failThreshold = 5) {
       else break;
     }
 
-    if (failureRun < failThreshold) continue;   // Boss not triggered
-    if (successStreak >= 5) continue; // Boss dissolved — don't show
+    if (failureRun < failThreshold) continue;          // Boss not triggered
+    if (successStreak >= dissThreshold) continue;      // Boss dissolved — don't show
 
     const state = successStreak >= 1 ? 'weakening' : 'active';
 
@@ -155,9 +157,9 @@ function computeBosses(opportunities, sorted, sitMap, failThreshold = 5) {
       e => Array.isArray(e.affected_opportunities) && e.affected_opportunities.includes(opp.id)
     );
 
-    if (oppEvs.length < 20) continue; // Need ≥ 20 events
+    if (oppEvs.length < oppWindow) continue; // Need ≥ oppWindow events
 
-    const last20 = oppEvs.slice(0, 20);
+    const last20 = oppEvs.slice(0, oppWindow);
     const netXp = last20.reduce((s, e) => s + (e.game_xp_change || 0), 0);
 
     if (netXp >= 0) continue; // Net positive — no boss
@@ -168,9 +170,9 @@ function computeBosses(opportunities, sorted, sitMap, failThreshold = 5) {
       if (isSuccess(ev.choice_value)) successStreak++;
       else break;
     }
-    if (successStreak >= 10) continue; // Dissolved
+    if (successStreak >= dissThreshold * 2) continue; // Dissolved (weakening + dissolution)
 
-    const state = successStreak >= 5 ? 'weakening' : 'active';
+    const state = successStreak >= dissThreshold ? 'weakening' : 'active';
 
     const negXp = last20.reduce((s, e) => {
       const gxp = e.game_xp_change || 0;
@@ -198,7 +200,14 @@ function computeBosses(opportunities, sorted, sitMap, failThreshold = 5) {
 }
 
 // ─── Compute all game-mode stats from raw DB rows ─────────────────────────────
-function computeGameStats(opportunities, events, situations, bossFailThreshold = 5) {
+function computeGameStats(opportunities, events, situations, cfg = {}) {
+  const {
+    bossThreshold   = 5,
+    bossDiss        = 5,
+    breadthTarget   = 7,
+    masteryMin      = 3,
+    oppBossWindow   = 20,
+  } = cfg;
   const sitMap = Object.fromEntries(situations.map(s => [s.id, s]));
   const now = Date.now();
   const ms30 = 30 * 24 * 60 * 60 * 1000;
@@ -276,9 +285,9 @@ function computeGameStats(opportunities, events, situations, bossFailThreshold =
       rebirths: getRebirthInfo(o.game_xp || 0).rebirths,
     }));
 
-  const bosses = computeBosses(opportunities, sorted, sitMap, bossFailThreshold);
+  const bosses = computeBosses(opportunities, sorted, sitMap, bossThreshold, bossDiss, oppBossWindow);
 
-  return { depthXP, archetype, top3, breadth: breadthSet.size, realStreak, badges, sortedOpps, oppStreaks, bosses };
+  return { depthXP, archetype, top3, breadth: breadthSet.size, breadthTarget, realStreak, badges, sortedOpps, oppStreaks, bosses, masteryMin };
 }
 
 // ─── Tension meter ───────────────────────────────────────────────────────────
@@ -369,7 +378,7 @@ function BossCard({ boss }) {
 }
 
 // ─── Character header ─────────────────────────────────────────────────────────
-function CharacterHeader({ archetype, depthXP, badges, breadth, realStreak, loginStreak, top3, expanded, onToggle }) {
+function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, realStreak, loginStreak, top3, expanded, onToggle }) {
   return (
     <div
       onClick={onToggle}
@@ -423,8 +432,8 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, realStreak, logi
       {/* Stats row */}
       <div style={{ display: 'flex', gap: 20, marginTop: 12, fontSize: '0.8rem', color: GM.textDim, flexWrap: 'wrap' }}>
         <span>
-          Breadth: <strong style={{ color: GM.text }}>{breadth}</strong>
-          <span style={{ fontSize: '0.7rem', marginLeft: 3 }}>this week</span>
+          Breadth: <strong style={{ color: breadth >= breadthTarget ? GM.gold : GM.text }}>{breadth}</strong>
+          <span style={{ fontSize: '0.7rem', marginLeft: 3 }}>/ {breadthTarget} this week</span>
         </span>
         {realStreak > 0 && (
           <span>
@@ -461,7 +470,7 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, realStreak, logi
 }
 
 // ─── Opportunity card (game mode) ─────────────────────────────────────────────
-function GameOppCard({ opp, expanded, onToggle, streaks }) {
+function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3 }) {
   const pathKey  = opp.path || 'default';
   const pathInfo = PATHS[pathKey];
   const lvInfo   = getPathLevel(opp.game_xp || 0, pathKey);
@@ -527,12 +536,12 @@ function GameOppCard({ opp, expanded, onToggle, streaks }) {
       </div>
 
       {/* Streak indicators (collapsed view) */}
-      {(attemptStreak > 0 || failureRun > 0 || (masteryStreak >= 3)) && (
+      {(attemptStreak > 0 || failureRun > 0 || (masteryStreak >= masteryMin)) && (
         <div style={{ marginTop: 8, display: 'flex', gap: 12, fontSize: '0.72rem', flexWrap: 'wrap' }}>
           {attemptStreak > 0 && (
             <span style={{ color: GM.accent }}>↑ Attempt: {attemptStreak}</span>
           )}
-          {masteryStreak >= 3 && (
+          {masteryStreak >= masteryMin && (
             <span style={{ color: GM.gold }}>★ Mastery: {masteryStreak}</span>
           )}
           {failureRun > 0 && (
@@ -573,7 +582,7 @@ function GameOppCard({ opp, expanded, onToggle, streaks }) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>★ Mastery streak</span>
-              <span style={{ color: masteryStreak >= 3 ? GM.gold : GM.textDim }}>{masteryStreak >= 3 ? masteryStreak : '—'}</span>
+              <span style={{ color: masteryStreak >= masteryMin ? GM.gold : GM.textDim }}>{masteryStreak >= masteryMin ? masteryStreak : '—'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>↺ Recovery best</span>
@@ -614,14 +623,22 @@ function GameProgress() {
         // Backfill game_xp for any events logged before game mode was enabled
         await dbHelpers.backfillGameXp();
 
-        const [opportunities, events, situations, profile, bossThreshold] = await Promise.all([
+        const [opportunities, events, situations, profile,
+               bossThreshold, bossDiss, breadthTarget, masteryMin, oppBossWindow] = await Promise.all([
           db.opportunities.toArray(),
           db.events.toArray(),
           db.situations.toArray(),
           dbHelpers.getGameProfile(),
           dbHelpers.getConfig('situationBossThreshold', 5),
+          dbHelpers.getConfig('bossDissolutionThreshold', 5),
+          dbHelpers.getConfig('breadthWeeklyTarget', 7),
+          dbHelpers.getConfig('masteryStreakMinDisplay', 3),
+          dbHelpers.getConfig('opportunityBossWindow', 20),
         ]);
-        setStats(computeGameStats(opportunities, events, situations, bossThreshold));
+        setStats(computeGameStats(
+          opportunities, events, situations,
+          { bossThreshold, bossDiss, breadthTarget, masteryMin, oppBossWindow }
+        ));
         setLoginStreak(profile.loginStreak || 0);
       } catch (error) {
         console.error('[GameProgress] loadData error:', error);
@@ -639,7 +656,7 @@ function GameProgress() {
     );
   }
 
-  const { depthXP, archetype, top3, breadth, realStreak, badges, sortedOpps, oppStreaks, bosses } = stats;
+  const { depthXP, archetype, top3, breadth, breadthTarget, realStreak, badges, sortedOpps, oppStreaks, bosses, masteryMin } = stats;
 
   return (
     <div style={{ background: GM.bg, minHeight: '100vh', padding: '16px 16px 80px', boxSizing: 'border-box' }}>
@@ -650,6 +667,7 @@ function GameProgress() {
         depthXP={depthXP}
         badges={badges}
         breadth={breadth}
+        breadthTarget={breadthTarget}
         realStreak={realStreak}
         loginStreak={loginStreak}
         top3={top3}
@@ -666,6 +684,7 @@ function GameProgress() {
             expanded={expandedOpp === opp.id}
             onToggle={() => setExpandedOpp(id => id === opp.id ? null : opp.id)}
             streaks={oppStreaks[opp.id]}
+            masteryMin={masteryMin}
           />
         ))}
         {sortedOpps.length === 0 && (
