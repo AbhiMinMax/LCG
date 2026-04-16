@@ -11,16 +11,19 @@ const SORT_OPTIONS = [
 ];
 
 // ─── Game-mode colour tokens ──────────────────────────────────────────────────
+// Structural colours defer to the active theme via CSS variables.
+// Semantic game colours (gold for milestones, accent for XP bars) stay fixed
+// because they carry meaning regardless of light/dark mode.
 const GM = {
-  bg:      '#1a1f2e',
-  bgCard:  '#232940',
-  bgDeep:  '#161b29',
-  text:    '#e8e4dc',
-  textDim: '#8a8578',
-  accent:  '#4a7fa5',
-  gold:    '#c8a84b',
-  border:  'rgba(255,255,255,0.07)',
-  bar:     'rgba(255,255,255,0.10)',
+  bg:      'var(--bg-primary)',
+  bgCard:  'var(--bg-secondary)',
+  bgDeep:  'var(--bg-tertiary)',
+  text:    'var(--text-primary)',
+  textDim: 'var(--text-secondary)',
+  accent:  '#4a7fa5',           // game XP bar / attempt streak — intentional blue
+  gold:    '#c8a84b',           // rebirth stars / milestones / grip — intentional amber
+  border:  'var(--border-color)',
+  bar:     'rgba(128,128,128,0.18)', // XP bar empty track — neutral in both themes
 };
 
 // ─── Per-opportunity streak computation ──────────────────────────────────────
