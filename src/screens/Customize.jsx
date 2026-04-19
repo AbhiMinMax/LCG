@@ -914,14 +914,21 @@ function Customize() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span
-                              style={{ fontSize: '1.1rem', color: 'var(--text-muted)', lineHeight: 1, cursor: 'grab', userSelect: 'none', touchAction: 'none', padding: '4px 6px 4px 2px' }}
+                              style={{ display: 'flex', flexDirection: 'column', gap: '3px', cursor: 'grab', userSelect: 'none', touchAction: 'none', padding: '4px 8px 4px 2px' }}
                               title="Drag to reorder"
                               onTouchStart={(e) => {
                                 e.stopPropagation();
                                 thoughtPairDragIndex.current = index;
                                 setThoughtDragSrc(index);
                               }}
-                            >⠿</span>
+                            >
+                              {[0,1,2].map(i => (
+                                <span key={i} style={{ display: 'flex', gap: '3px' }}>
+                                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--text-muted, #aaa)', display: 'block' }} />
+                                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--text-muted, #aaa)', display: 'block' }} />
+                                </span>
+                              ))}
+                            </span>
                             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                               {isPair ? '💭 Pair' : isSoloBack ? '😈 Back only' : '😇 Forth only'}
                             </span>
