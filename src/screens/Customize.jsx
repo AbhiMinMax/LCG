@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { db, dbHelpers, ensureDefaultData } from '../database/db';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
@@ -65,6 +65,8 @@ function Customize() {
     isMeta: false
   });
   
+  const thoughtPairDragIndex = useRef(null);
+
   const [opportunityForm, setOpportunityForm] = useState({
     title: '',
     description: '',
@@ -852,18 +854,36 @@ function Customize() {
                     return (
                       <div
                         key={index}
+                        draggable
+                        onDragStart={() => { thoughtPairDragIndex.current = index; }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const from = thoughtPairDragIndex.current;
+                          if (from === null || from === index) return;
+                          const updated = [...situationForm.thoughtPairs];
+                          const [moved] = updated.splice(from, 1);
+                          updated.splice(index, 0, moved);
+                          setSituationForm({ ...situationForm, thoughtPairs: updated });
+                          thoughtPairDragIndex.current = null;
+                        }}
+                        onDragEnd={() => { thoughtPairDragIndex.current = null; }}
                         style={{
                           border: isPair ? '1px solid #dee2e6' : `1px solid ${isSoloBack ? '#dc354540' : '#007bff40'}`,
                           borderRadius: '8px',
                           padding: '10px',
                           marginBottom: '10px',
                           background: isPair ? 'var(--bg-tertiary)' : 'transparent',
+                          cursor: 'grab',
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                            {isPair ? '💭 Pair' : isSoloBack ? '😈 Back only' : '😇 Forth only'}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '1rem', color: 'var(--text-muted)', lineHeight: 1, cursor: 'grab', userSelect: 'none' }} title="Drag to reorder">⠿</span>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                              {isPair ? '💭 Pair' : isSoloBack ? '😈 Back only' : '😇 Forth only'}
+                            </span>
+                          </div>
                           <button
                             type="button"
                             onClick={() => setSituationForm({
