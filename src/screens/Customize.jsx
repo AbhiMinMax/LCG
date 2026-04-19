@@ -66,6 +66,37 @@ function Customize() {
   });
   
   const thoughtPairDragIndex = useRef(null);
+  const [thoughtDragSrc, setThoughtDragSrc] = useState(null);
+
+  useEffect(() => {
+    if (thoughtDragSrc === null) return;
+    const handleMove = (e) => e.preventDefault();
+    const handleEnd = (e) => {
+      const touch = e.changedTouches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const pairEl = el?.closest('[data-pair-index]');
+      if (pairEl) {
+        const to = parseInt(pairEl.dataset.pairIndex, 10);
+        const from = thoughtPairDragIndex.current;
+        if (!isNaN(to) && from !== null && to !== from) {
+          setSituationForm(prev => {
+            const updated = [...prev.thoughtPairs];
+            const [moved] = updated.splice(from, 1);
+            updated.splice(to, 0, moved);
+            return { ...prev, thoughtPairs: updated };
+          });
+        }
+      }
+      thoughtPairDragIndex.current = null;
+      setThoughtDragSrc(null);
+    };
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
+    return () => {
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
+    };
+  }, [thoughtDragSrc]);
 
   const [opportunityForm, setOpportunityForm] = useState({
     title: '',
@@ -854,8 +885,9 @@ function Customize() {
                     return (
                       <div
                         key={index}
+                        data-pair-index={index}
                         draggable
-                        onDragStart={() => { thoughtPairDragIndex.current = index; }}
+                        onDragStart={() => { thoughtPairDragIndex.current = index; setThoughtDragSrc(index); }}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => {
                           e.preventDefault();
@@ -866,20 +898,30 @@ function Customize() {
                           updated.splice(index, 0, moved);
                           setSituationForm({ ...situationForm, thoughtPairs: updated });
                           thoughtPairDragIndex.current = null;
+                          setThoughtDragSrc(null);
                         }}
-                        onDragEnd={() => { thoughtPairDragIndex.current = null; }}
+                        onDragEnd={() => { thoughtPairDragIndex.current = null; setThoughtDragSrc(null); }}
                         style={{
                           border: isPair ? '1px solid #dee2e6' : `1px solid ${isSoloBack ? '#dc354540' : '#007bff40'}`,
                           borderRadius: '8px',
                           padding: '10px',
                           marginBottom: '10px',
                           background: isPair ? 'var(--bg-tertiary)' : 'transparent',
-                          cursor: 'grab',
+                          opacity: thoughtDragSrc === index ? 0.45 : 1,
+                          transition: 'opacity 0.15s',
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '1rem', color: 'var(--text-muted)', lineHeight: 1, cursor: 'grab', userSelect: 'none' }} title="Drag to reorder">⠿</span>
+                            <span
+                              style={{ fontSize: '1.1rem', color: 'var(--text-muted)', lineHeight: 1, cursor: 'grab', userSelect: 'none', touchAction: 'none', padding: '4px 6px 4px 2px' }}
+                              title="Drag to reorder"
+                              onTouchStart={(e) => {
+                                e.stopPropagation();
+                                thoughtPairDragIndex.current = index;
+                                setThoughtDragSrc(index);
+                              }}
+                            >⠿</span>
                             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                               {isPair ? '💭 Pair' : isSoloBack ? '😈 Back only' : '😇 Forth only'}
                             </span>
