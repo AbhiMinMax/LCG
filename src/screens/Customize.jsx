@@ -68,11 +68,14 @@ function Customize() {
   const thoughtPairDragIndex = useRef(null);
   const [thoughtDragSrc, setThoughtDragSrc] = useState(null);
 
-  useEffect(() => {
-    if (thoughtDragSrc === null) return;
-    const handleMove = (e) => e.preventDefault();
-    const handleEnd = (e) => {
-      const touch = e.changedTouches[0];
+  const handleThoughtTouchStart = (e, index) => {
+    e.stopPropagation();
+    thoughtPairDragIndex.current = index;
+    setThoughtDragSrc(index);
+
+    const handleMove = (ev) => ev.preventDefault();
+    const handleEnd = (ev) => {
+      const touch = ev.changedTouches[0];
       const el = document.elementFromPoint(touch.clientX, touch.clientY);
       const pairEl = el?.closest('[data-pair-index]');
       if (pairEl) {
@@ -89,14 +92,13 @@ function Customize() {
       }
       thoughtPairDragIndex.current = null;
       setThoughtDragSrc(null);
-    };
-    document.addEventListener('touchmove', handleMove, { passive: false });
-    document.addEventListener('touchend', handleEnd);
-    return () => {
       document.removeEventListener('touchmove', handleMove);
       document.removeEventListener('touchend', handleEnd);
     };
-  }, [thoughtDragSrc]);
+
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
+  };
 
   const [opportunityForm, setOpportunityForm] = useState({
     title: '',
@@ -916,11 +918,7 @@ function Customize() {
                             <span
                               style={{ display: 'flex', flexDirection: 'column', gap: '3px', cursor: 'grab', userSelect: 'none', touchAction: 'none', padding: '4px 8px 4px 2px' }}
                               title="Drag to reorder"
-                              onTouchStart={(e) => {
-                                e.stopPropagation();
-                                thoughtPairDragIndex.current = index;
-                                setThoughtDragSrc(index);
-                              }}
+                              onTouchStart={(e) => handleThoughtTouchStart(e, index)}
                             >
                               {[0,1,2].map(i => (
                                 <span key={i} style={{ display: 'flex', gap: '3px' }}>
