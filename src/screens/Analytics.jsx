@@ -34,6 +34,298 @@ ChartJS.register(
   Filler
 );
 
+// ─── Sparkline (inline SVG mini-chart) ───────────────────────────────────────
+function Sparkline({ values, width = 80, height = 24, color = '#4a7fa5' }) {
+  if (!values || values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - ((v - min) / range) * (height - 2) - 1;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg width={width} height={height} style={{ display: 'block', flexShrink: 0 }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// ─── Game analytics computation ───────────────────────────────────────────────
+function computeGameAnalyticsData(rawEvents, rawOpps, rawSits, profile) {
+  const sortedAsc  = [...rawEvents].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const sortedDesc = [...sortedAsc].reverse();
+  const sitMap = Object.fromEntries(rawSits.map(s => [s.id, s]));
+
+  // Overall
+  const totalEvents = rawEvents.length;
+  const totalGameXP = rawEvents.reduce((s, e) => s + (e.game_xp_change || 0), 0);
+  const loginStreak = profile.loginStreak || 0;
+  const realCount = rawEvents.filter(e => sitMap[e.situation_id] && !sitMap[e.situation_id].isMeta).length;
+  const realPct = totalEvents > 0 ? Math.round((realCount / totalEvents) * 100) : 0;
+  const depthXP = rawEvents.reduce((s, e) => {
+    const sit = sitMap[e.situation_id];
+    const diff = sit ? (sit.challenging_level || 3) : 3;
+    const w = 1 + (diff - 1) * 0.15;
+    const gxp = e.game_xp_change || 0;
+    return gxp > 0 ? s + Math.round(gxp * w) : s;
+  }, 0);
+
+  // Per opportunity — event count, 8-week sparkline, streaks
+  const now = Date.now();
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const isSuccess = v => v === 3 || v === 4;
+  const isFailure = v => v === 1 || v === 2;
+
+  const oppData = rawOpps.map(opp => {
+    const evs = sortedDesc.filter(
+      e => Array.isArray(e.affected_opportunities) && e.affected_opportunities.includes(opp.id)
+    );
+    if (evs.length === 0) return null;
+
+    const weekXP = Array(8).fill(0);
+    for (const ev of evs) {
+      const wIdx = Math.floor((now - new Date(ev.timestamp).getTime()) / weekMs);
+      if (wIdx >= 0 && wIdx < 8) weekXP[7 - wIdx] += ev.game_xp_change || 0;
+    }
+
+    let attemptStreak = 0, masteryStreak = 0, failureRun = 0, recoveryStreak = 0, recoveryBest = 0;
+    for (const ev of evs) { if (isSuccess(ev.choice_value)) attemptStreak++; else break; }
+    for (const ev of evs) { if (ev.choice_value === 4) masteryStreak++; else break; }
+    for (const ev of evs) { if (isFailure(ev.choice_value)) failureRun++; else break; }
+    const firstFailIdx = evs.findIndex(e => isFailure(e.choice_value));
+    if (firstFailIdx > 0) recoveryStreak = firstFailIdx;
+    let curRun = 0, inRec = false;
+    for (let i = evs.length - 1; i >= 0; i--) {
+      const cv = evs[i].choice_value;
+      if (isFailure(cv)) { if (inRec && curRun > recoveryBest) recoveryBest = curRun; curRun = 0; inRec = true; }
+      else if (inRec) curRun++;
+    }
+    if (inRec && curRun > recoveryBest) recoveryBest = curRun;
+
+    return { opp, eventCount: evs.length, sparklineValues: weekXP, streaks: { attemptStreak, masteryStreak, failureRun, recoveryStreak, recoveryBest } };
+  }).filter(Boolean);
+
+  // Per situation — encounter count, choice distribution, current streak state
+  const sitData = rawSits.map(sit => {
+    const evs = sortedDesc.filter(e => e.situation_id === sit.id);
+    if (evs.length === 0) return null;
+    const counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    for (const ev of evs) { if (ev.choice_value >= 1 && ev.choice_value <= 4) counts[ev.choice_value]++; }
+    const pcts = Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, Math.round((v / evs.length) * 100)]));
+    let currentStreak = 0, currentFailRun = 0;
+    for (const ev of evs) { if (isSuccess(ev.choice_value)) currentStreak++; else break; }
+    for (const ev of evs) { if (isFailure(ev.choice_value)) currentFailRun++; else break; }
+    return { sit, encounterCount: evs.length, choicePcts: pcts, currentStreak, currentFailRun };
+  }).filter(Boolean);
+
+  // Breadth — distinct situations with tried/well_done per week (last 8 weeks)
+  const breadthWeeks = Array.from({ length: 8 }, (_, i) => {
+    const wStart = now - (8 - i) * weekMs;
+    const wEnd = wStart + weekMs;
+    const ids = new Set();
+    for (const ev of rawEvents) {
+      const t = new Date(ev.timestamp).getTime();
+      if (t >= wStart && t < wEnd && isSuccess(ev.choice_value)) ids.add(ev.situation_id);
+    }
+    return ids.size;
+  });
+
+  // Boss history — situation bosses that were spawned and then dissolved
+  const BOSS_THRESH = 5, DISS_THRESH = 5;
+  const bossHistory = [];
+  const sst = {};
+  for (const ev of sortedAsc) {
+    const sid = ev.situation_id;
+    if (!sst[sid]) sst[sid] = { failRun: 0, active: false, startTs: null, dissStreak: 0 };
+    const s = sst[sid];
+    if (isFailure(ev.choice_value)) {
+      s.failRun++;
+      s.dissStreak = 0;
+      if (!s.active && s.failRun >= BOSS_THRESH) {
+        s.active = true;
+        s.startTs = new Date(ev.timestamp).getTime();
+      }
+    } else if (isSuccess(ev.choice_value)) {
+      s.failRun = 0;
+      if (s.active) {
+        s.dissStreak++;
+        if (s.dissStreak >= DISS_THRESH) {
+          const endTs = new Date(ev.timestamp).getTime();
+          const durationDays = Math.round((endTs - s.startTs) / (1000 * 60 * 60 * 24));
+          const sit = sitMap[sid];
+          bossHistory.push({ title: sit?.title || '(deleted)', startTs: s.startTs, endTs, durationDays, dissolutionChoice: ev.choice_value });
+          s.active = false;
+          s.dissStreak = 0;
+        }
+      }
+    }
+  }
+  bossHistory.sort((a, b) => b.endTs - a.endTs);
+
+  return { totalEvents, totalGameXP, loginStreak, realPct, depthXP, oppData, sitData, breadthWeeks, bossHistory };
+}
+
+// ─── Game mode stats section ──────────────────────────────────────────────────
+const CHOICE_LABELS = { 1: 'Misguided', 2: "Didn't try", 3: 'Tried', 4: 'Well done' };
+const CHOICE_COLORS = { 1: '#c0392b', 2: '#e67e22', 3: '#27ae60', 4: '#2980b9' };
+
+function GameStatsSection({ rawEvents, rawOpps, rawSits, profile }) {
+  const [expanded, setExpanded] = useState({ overall: true, opportunities: false, situations: false, breadth: false, bossHistory: false });
+  const toggle = key => setExpanded(s => ({ ...s, [key]: !s[key] }));
+
+  const data = useMemo(
+    () => computeGameAnalyticsData(rawEvents, rawOpps, rawSits, profile),
+    [rawEvents, rawOpps, rawSits, profile]
+  );
+
+  const SectionRow = ({ label, value }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+      <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{value}</span>
+    </div>
+  );
+
+  const SectionHeader = ({ sectionKey, label, count }) => (
+    <div
+      onClick={() => toggle(sectionKey)}
+      style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '10px 0', cursor: 'pointer',
+        borderTop: '1px solid var(--border-color)',
+      }}
+    >
+      <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+        {label}
+        {count !== undefined && <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 6, fontSize: '0.78rem' }}>({count})</span>}
+      </span>
+      <span style={{ color: 'var(--text-secondary)', fontSize: '0.72rem' }}>{expanded[sectionKey] ? '▲' : '▼'}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '16px 18px', marginBottom: 18 }}>
+      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+        Stats
+      </div>
+
+      {/* Overall */}
+      <SectionHeader sectionKey="overall" label="Overall" />
+      {expanded.overall && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 0 4px' }}>
+          <SectionRow label="Total events" value={data.totalEvents} />
+          <SectionRow label="Total game XP" value={data.totalGameXP.toLocaleString()} />
+          <SectionRow label="Login streak" value={`${data.loginStreak} day${data.loginStreak !== 1 ? 's' : ''}`} />
+          <SectionRow label="Real / meta split" value={`${data.realPct}% real`} />
+          <SectionRow label="Depth XP" value={data.depthXP.toLocaleString()} />
+        </div>
+      )}
+
+      {/* Per opportunity */}
+      <SectionHeader sectionKey="opportunities" label="Opportunities" count={data.oppData.length} />
+      {expanded.opportunities && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 0 4px' }}>
+          {data.oppData.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontStyle: 'italic' }}>No events logged yet.</div>}
+          {data.oppData.map(({ opp, eventCount, sparklineValues, streaks }) => (
+            <div key={opp.id} style={{ padding: '10px 12px', background: 'var(--bg-tertiary)', borderRadius: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)', flex: 1, marginRight: 8 }}>{opp.title}</span>
+                <Sparkline values={sparklineValues} width={60} height={20} color="#4a7fa5" />
+              </div>
+              <div style={{ display: 'flex', gap: 12, fontSize: '0.76rem', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
+                <span>Events: <strong style={{ color: 'var(--text-primary)' }}>{eventCount}</strong></span>
+                {streaks.attemptStreak > 0 && <span style={{ color: '#4a7fa5' }}>↑ {streaks.attemptStreak}</span>}
+                {streaks.masteryStreak > 0 && <span style={{ color: '#c8a84b' }}>★ {streaks.masteryStreak}</span>}
+                {streaks.failureRun > 0 && <span style={{ color: '#c0392b' }}>↓ run {streaks.failureRun}</span>}
+                {streaks.recoveryBest > 0 && <span>↺ best {streaks.recoveryBest}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Per situation */}
+      <SectionHeader sectionKey="situations" label="Situations" count={data.sitData.length} />
+      {expanded.situations && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 0 4px' }}>
+          {data.sitData.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontStyle: 'italic' }}>No situations with events yet.</div>}
+          {data.sitData.map(({ sit, encounterCount, choicePcts, currentStreak, currentFailRun }) => (
+            <div key={sit.id} style={{ padding: '10px 12px', background: 'var(--bg-tertiary)', borderRadius: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>{sit.title}</span>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>{encounterCount}×</span>
+              </div>
+              {/* Choice distribution bar */}
+              <div style={{ display: 'flex', height: 4, borderRadius: 2, overflow: 'hidden', marginBottom: 5, gap: 1 }}>
+                {[1, 2, 3, 4].map(cv => choicePcts[cv] > 0 ? (
+                  <div key={cv} title={`${CHOICE_LABELS[cv]}: ${choicePcts[cv]}%`} style={{ width: `${choicePcts[cv]}%`, background: CHOICE_COLORS[cv], minWidth: 2 }} />
+                ) : null)}
+              </div>
+              <div style={{ display: 'flex', gap: 8, fontSize: '0.72rem', flexWrap: 'wrap' }}>
+                {[1, 2, 3, 4].map(cv => choicePcts[cv] > 0 ? (
+                  <span key={cv} style={{ color: CHOICE_COLORS[cv] }}>{CHOICE_LABELS[cv]}: {choicePcts[cv]}%</span>
+                ) : null)}
+                {currentStreak > 0 && <span style={{ color: '#27ae60', marginLeft: 4 }}>↑ {currentStreak} streak</span>}
+                {currentFailRun > 0 && <span style={{ color: '#c0392b', marginLeft: 4 }}>↓ {currentFailRun} run</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Weekly breadth */}
+      <SectionHeader sectionKey="breadth" label="Weekly breadth" />
+      {expanded.breadth && (
+        <div style={{ padding: '10px 0 4px' }}>
+          <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
+            Distinct situations with tried/well done per week (last 8 weeks)
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 52 }}>
+            {data.breadthWeeks.map((val, i) => {
+              const maxVal = Math.max(...data.breadthWeeks, 1);
+              const h = Math.max(Math.round((val / maxVal) * 42), val > 0 ? 4 : 2);
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 2, height: '100%' }}>
+                  <div style={{ width: '100%', height: h, background: '#4a7fa5', borderRadius: 2, opacity: 0.5 + (i / 8) * 0.5 }} />
+                  <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>{val}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.64rem', color: 'var(--text-secondary)', marginTop: 2, opacity: 0.6 }}>
+            <span>8w ago</span><span>this week</span>
+          </div>
+        </div>
+      )}
+
+      {/* Boss history */}
+      <SectionHeader sectionKey="bossHistory" label="Boss history" count={data.bossHistory.length} />
+      {expanded.bossHistory && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 0 4px' }}>
+          {data.bossHistory.length === 0 && (
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontStyle: 'italic' }}>No bosses defeated yet.</div>
+          )}
+          {data.bossHistory.map((boss, i) => (
+            <div key={i} style={{ padding: '10px 12px', background: 'var(--bg-tertiary)', borderRadius: 6, borderLeft: '2px solid rgba(200,168,75,0.35)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>{boss.title}</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', flexShrink: 0, marginLeft: 8 }}>
+                  {new Date(boss.endTs).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: 3 }}>
+                {boss.durationDays} day{boss.durationDays !== 1 ? 's' : ''} · broke with{' '}
+                <span style={{ color: CHOICE_COLORS[boss.dissolutionChoice] }}>{CHOICE_LABELS[boss.dissolutionChoice]}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Analytics() {
   const { theme } = useTheme();
   const [analyticsData, setAnalyticsData] = useState({
@@ -52,6 +344,7 @@ function Analytics() {
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
   const [narratives, setNarratives] = useState({ daily: [], weekly: [], monthly: [] });
   const [narrativeTab, setNarrativeTab] = useState('daily');
+  const [gameRawData, setGameRawData] = useState(null);
 
   useEffect(() => {
     loadAnalyticsData();
@@ -156,6 +449,7 @@ function Analytics() {
 
         await dbHelpers.saveNarratives(stored);
         setNarratives(stored);
+        setGameRawData({ rawEvents, rawOpps, rawSits, profile });
       }
     } catch (error) {
       console.error('Error loading analytics data:', error);
@@ -692,6 +986,16 @@ function Analytics() {
               </div>
             )}
           </div>
+        )}
+
+        {/* Section 2 — Game stats */}
+        {gameModeEnabled && gameRawData && (
+          <GameStatsSection
+            rawEvents={gameRawData.rawEvents}
+            rawOpps={gameRawData.rawOpps}
+            rawSits={gameRawData.rawSits}
+            profile={gameRawData.profile}
+          />
         )}
 
         {/* Enhanced Filter Controls */}
