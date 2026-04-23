@@ -5,6 +5,24 @@ import { TRAITS, computeUnlockedTraitIds } from '../utils/traitUtils';
 import { consumePendingEvent, storeBossSnapshot, getPrevBossSnapshot } from '../utils/animationState';
 import './ProgressStyles.css';
 
+// ─── Inline sparkline ────────────────────────────────────────────────────────
+function Sparkline({ values, width = 60, height = 18, color = '#4a7fa5' }) {
+  if (!values || values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - ((v - min) / range) * (height - 2) - 1;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg width={width} height={height} style={{ display: 'block', flexShrink: 0, opacity: 0.7 }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // ─── Standard mode sort options ───────────────────────────────────────────────
 const SORT_OPTIONS = [
   { value: 'alphabetical', label: 'A-Z' },
@@ -332,6 +350,19 @@ function computeGameStats(opportunities, events, situations, cfg = {}) {
     (lastActive[a.id] || new Date(a.created_at).getTime())
   );
 
+  // Per-opportunity sparkline: game XP gain bucketed into 8 weekly slots (oldest → newest)
+  const oppSparklines = {};
+  const weekMs8 = 7 * 24 * 60 * 60 * 1000;
+  for (const opp of opportunities) {
+    const vals = Array(8).fill(0);
+    for (const ev of events) {
+      if (!Array.isArray(ev.affected_opportunities) || !ev.affected_opportunities.includes(opp.id)) continue;
+      const wIdx = Math.floor((now - new Date(ev.timestamp).getTime()) / weekMs8);
+      if (wIdx >= 0 && wIdx < 8) vals[7 - wIdx] += ev.game_xp_change || 0;
+    }
+    oppSparklines[opp.id] = vals;
+  }
+
   // Meta-skill badges: opportunities that have completed at least one full cycle (rebirth ≥ 1)
   const badges = opportunities
     .filter(o => getRebirthInfo(o.game_xp || 0).rebirths >= 1)
@@ -345,7 +376,7 @@ function computeGameStats(opportunities, events, situations, cfg = {}) {
   const bosses = computeBosses(opportunities, sorted, sitMap, bossThreshold, bossDiss, oppBossWindow);
   const randomChallenge = computeRandomChallenge(opportunities, sorted, situations, oppStreaks);
 
-  return { depthXP, archetype, top3, breadth: breadthSet.size, breadthTarget, realStreak, badges, sortedOpps, oppStreaks, bosses, masteryMin, randomChallenge };
+  return { depthXP, archetype, top3, breadth: breadthSet.size, breadthTarget, realStreak, badges, sortedOpps, oppStreaks, oppSparklines, bosses, masteryMin, randomChallenge };
 }
 
 // ─── Tension meter ───────────────────────────────────────────────────────────
@@ -587,7 +618,7 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, r
 }
 
 // ─── Opportunity card (game mode) ─────────────────────────────────────────────
-function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldPulse, levelChange, barReady, isEdgeOpp }) {
+function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldPulse, levelChange, barReady, isEdgeOpp, sparklineValues }) {
   const pathKey  = opp.path || 'default';
   const pathInfo = PATHS[pathKey];
   const lvInfo   = getPathLevel(opp.game_xp || 0, pathKey);
@@ -691,6 +722,13 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldP
           )}
         </div>
       </div>
+
+      {/* XP history sparkline */}
+      {sparklineValues && sparklineValues.some(v => v !== 0) && (
+        <div style={{ marginTop: 6 }}>
+          <Sparkline values={sparklineValues} width={80} height={18} color={barColor} />
+        </div>
+      )}
 
       {/* Streak indicators (collapsed view) */}
       {(attemptStreak > 0 || failureRun > 0 || (masteryStreak >= masteryMin)) && (
@@ -850,7 +888,7 @@ function GameProgress() {
     );
   }
 
-  const { depthXP, archetype, top3, breadth, breadthTarget, realStreak, badges, sortedOpps, oppStreaks, bosses, masteryMin, randomChallenge } = stats;
+  const { depthXP, archetype, top3, breadth, breadthTarget, realStreak, badges, sortedOpps, oppStreaks, oppSparklines, bosses, masteryMin, randomChallenge } = stats;
 
   return (
     <div style={{ background: GM.bg, minHeight: '100vh', padding: '16px 16px 80px', boxSizing: 'border-box' }}>
@@ -885,6 +923,7 @@ function GameProgress() {
             levelChange={levelChanges ? levelChanges[opp.id] : null}
             barReady={barsReady}
             isEdgeOpp={!!(randomChallenge?.type === 'edge' && randomChallenge.oppId === opp.id)}
+            sparklineValues={oppSparklines ? oppSparklines[opp.id] : null}
           />
         ))}
         {sortedOpps.length === 0 && (
