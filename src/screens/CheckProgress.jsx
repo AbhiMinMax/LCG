@@ -204,6 +204,58 @@ function computeBosses(opportunities, sorted, sitMap, failThreshold = 5, dissThr
   return bosses;
 }
 
+// ─── Random challenge computation ─────────────────────────────────────────────
+// Priority: Reversal > Edge > Resurgence. Returns one challenge or null.
+// sortedNewestFirst = all events newest → oldest (already sorted by caller)
+function computeRandomChallenge(opportunities, sortedNewestFirst, situations, oppStreaks) {
+  const now = Date.now();
+  const ms21 = 21 * 24 * 60 * 60 * 1000;
+
+  // 1. Reversal: failure run exactly 5 on any situation
+  const seenSitIds = [...new Set(sortedNewestFirst.map(e => e.situation_id))];
+  for (const sitId of seenSitIds) {
+    const sitEvs = sortedNewestFirst.filter(e => e.situation_id === sitId);
+    let run = 0;
+    for (const ev of sitEvs) {
+      if (ev.choice_value === 1 || ev.choice_value === 2) run++;
+      else break;
+    }
+    if (run === 5) return { type: 'reversal', text: 'This one keeps winning.' };
+  }
+  // Reversal: failure run exactly 5 on any opportunity
+  for (const opp of opportunities) {
+    if ((oppStreaks[opp.id]?.failureRun || 0) === 5) {
+      return { type: 'reversal', text: 'This one keeps winning.' };
+    }
+  }
+
+  // 2. Edge: opportunity within 10% of next level label
+  let edgeOppId = null;
+  let minPct = 1;
+  for (const opp of opportunities) {
+    const lvInfo = getPathLevel(opp.game_xp || 0, opp.path || 'default');
+    if (lvInfo.xpToNext && lvInfo.xpForLevel > 0) {
+      const pct = lvInfo.xpToNext / lvInfo.xpForLevel;
+      if (pct <= 0.1 && pct < minPct) { minPct = pct; edgeOppId = opp.id; }
+    }
+  }
+  if (edgeOppId) return { type: 'edge', oppId: edgeOppId };
+
+  // 3. Resurgence: situation not logged in ≥ 21 days
+  const lastSitTs = {};
+  for (const ev of sortedNewestFirst) {
+    if (!lastSitTs[ev.situation_id]) lastSitTs[ev.situation_id] = new Date(ev.timestamp).getTime();
+  }
+  for (const sit of situations) {
+    const last = lastSitTs[sit.id];
+    if (last && now - last >= ms21) {
+      return { type: 'resurgence', text: `${sit.title} hasn't come up in a while. It's probably still out there.` };
+    }
+  }
+
+  return null;
+}
+
 // ─── Compute all game-mode stats from raw DB rows ─────────────────────────────
 function computeGameStats(opportunities, events, situations, cfg = {}) {
   const {
@@ -291,8 +343,9 @@ function computeGameStats(opportunities, events, situations, cfg = {}) {
     }));
 
   const bosses = computeBosses(opportunities, sorted, sitMap, bossThreshold, bossDiss, oppBossWindow);
+  const randomChallenge = computeRandomChallenge(opportunities, sorted, situations, oppStreaks);
 
-  return { depthXP, archetype, top3, breadth: breadthSet.size, breadthTarget, realStreak, badges, sortedOpps, oppStreaks, bosses, masteryMin };
+  return { depthXP, archetype, top3, breadth: breadthSet.size, breadthTarget, realStreak, badges, sortedOpps, oppStreaks, bosses, masteryMin, randomChallenge };
 }
 
 // ─── Tension meter ───────────────────────────────────────────────────────────
@@ -534,7 +587,7 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, r
 }
 
 // ─── Opportunity card (game mode) ─────────────────────────────────────────────
-function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldPulse, levelChange, barReady }) {
+function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldPulse, levelChange, barReady, isEdgeOpp }) {
   const pathKey  = opp.path || 'default';
   const pathInfo = PATHS[pathKey];
   const lvInfo   = getPathLevel(opp.game_xp || 0, pathKey);
@@ -581,6 +634,7 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldP
       style={{
         background: GM.bgCard,
         border: `1px solid ${GM.border}`,
+        borderLeft: isEdgeOpp ? `3px solid ${GM.accent}` : `1px solid ${GM.border}`,
         borderRadius: 8,
         padding: '13px 15px',
         marginBottom: 8,
@@ -796,7 +850,7 @@ function GameProgress() {
     );
   }
 
-  const { depthXP, archetype, top3, breadth, breadthTarget, realStreak, badges, sortedOpps, oppStreaks, bosses, masteryMin } = stats;
+  const { depthXP, archetype, top3, breadth, breadthTarget, realStreak, badges, sortedOpps, oppStreaks, bosses, masteryMin, randomChallenge } = stats;
 
   return (
     <div style={{ background: GM.bg, minHeight: '100vh', padding: '16px 16px 80px', boxSizing: 'border-box' }}>
@@ -830,6 +884,7 @@ function GameProgress() {
             shouldPulse={!!(pulsingOpps && pulsingOpps.has(opp.id))}
             levelChange={levelChanges ? levelChanges[opp.id] : null}
             barReady={barsReady}
+            isEdgeOpp={!!(randomChallenge?.type === 'edge' && randomChallenge.oppId === opp.id)}
           />
         ))}
         {sortedOpps.length === 0 && (
@@ -840,7 +895,7 @@ function GameProgress() {
       </div>
 
       {/* Section 3 — The Frontier */}
-      {(bosses.length > 0 || dissolvingBosses.length > 0) && (
+      {(bosses.length > 0 || dissolvingBosses.length > 0 || (randomChallenge && randomChallenge.type !== 'edge')) && (
         <div style={{
           marginTop: 28,
           borderTop: `1px solid ${GM.border}`,
@@ -852,6 +907,11 @@ function GameProgress() {
           {bosses.map(boss => (
             <BossCard key={`${boss.type}-${boss.id}`} boss={boss} />
           ))}
+          {randomChallenge && randomChallenge.type !== 'edge' && (
+            <div style={{ fontSize: '0.85rem', color: GM.textDim, marginTop: bosses.length > 0 ? 12 : 0, padding: '0 4px', fontStyle: 'italic' }}>
+              {randomChallenge.text}
+            </div>
+          )}
         </div>
       )}
     </div>
