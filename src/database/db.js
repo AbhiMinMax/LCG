@@ -769,6 +769,14 @@ export const dbHelpers = {
     }
   },
 
+  // Narrative storage
+  async getNarratives() {
+    return this.getConfig('narratives', { daily: [], weekly: [], monthly: [] });
+  },
+  async saveNarratives(narratives) {
+    return this.setConfig('narratives', narratives);
+  },
+
   // Get configuration value
   async getConfig(key, defaultValue = null) {
     try {

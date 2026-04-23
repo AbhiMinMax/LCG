@@ -14,9 +14,10 @@ import {
   Filler,
 } from 'chart.js';
 import { Bar, Line, Pie, Doughnut, Radar, PolarArea } from 'react-chartjs-2';
-import { dbHelpers } from '../database/db';
+import { dbHelpers, db } from '../database/db';
 import { useTheme } from '../hooks/useTheme';
 import { analyticsUtils } from '../utils/analyticsUtils';
+import { generateDailyNarrative, generateWeeklyNarrative, generateMonthlyNarrative } from '../utils/narrativeUtils';
 import './Analytics.css';
 
 ChartJS.register(
@@ -48,6 +49,9 @@ function Analytics() {
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [chartView, setChartView] = useState('detailed'); // overview, detailed, comparison
   const [selectedMetric, setSelectedMetric] = useState('all');
+  const [gameModeEnabled, setGameModeEnabled] = useState(false);
+  const [narratives, setNarratives] = useState({ daily: [], weekly: [], monthly: [] });
+  const [narrativeTab, setNarrativeTab] = useState('daily');
 
   useEffect(() => {
     loadAnalyticsData();
@@ -95,19 +99,64 @@ function Analytics() {
   const loadAnalyticsData = async () => {
     try {
       setLoading(true);
-      const [opportunities, events, stats, situations] = await Promise.all([
+      const [opportunities, events, stats, situations, isGameMode] = await Promise.all([
         dbHelpers.getOpportunitiesSorted('level'),
         dbHelpers.getEventsWithDetails(),
         dbHelpers.getDataStats(),
-        dbHelpers.getSituationsWithOpportunities()
+        dbHelpers.getSituationsWithOpportunities(),
+        dbHelpers.getConfig('gameModeEnabled', false),
       ]);
 
-      setAnalyticsData({
-        opportunities,
-        events,
-        stats,
-        situations
-      });
+      setAnalyticsData({ opportunities, events, stats, situations });
+      setGameModeEnabled(!!isGameMode);
+
+      if (isGameMode) {
+        const [rawEvents, rawOpps, rawSits, profile, stored] = await Promise.all([
+          db.events.toArray(),
+          db.opportunities.toArray(),
+          db.situations.toArray(),
+          dbHelpers.getGameProfile(),
+          dbHelpers.getNarratives(),
+        ]);
+
+        const now = new Date();
+        const todayStr = now.toDateString();
+        const thisWeekMon = (() => {
+          const d = new Date(now);
+          d.setDate(d.getDate() - d.getDay());
+          d.setHours(0,0,0,0);
+          return d.toISOString().slice(0,10);
+        })();
+        const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+        // Generate daily if not yet generated today
+        const lastDaily = stored.daily[0]?.generatedAt;
+        if (!lastDaily || new Date(lastDaily).toDateString() !== todayStr) {
+          const text = generateDailyNarrative(rawEvents, rawSits, rawOpps, profile);
+          if (text) stored.daily.unshift({ text, generatedAt: now.toISOString() });
+        }
+        // Generate weekly if not yet generated this week
+        const lastWeekly = stored.weekly[0]?.generatedAt;
+        const lastWeeklyWk = lastWeekly
+          ? (() => { const d = new Date(lastWeekly); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); })()
+          : null;
+        if (lastWeeklyWk !== thisWeekMon) {
+          const text = generateWeeklyNarrative(rawEvents, rawSits, rawOpps, profile);
+          if (text) stored.weekly.unshift({ text, generatedAt: now.toISOString() });
+        }
+        // Generate monthly if not yet generated this month
+        const lastMonthly = stored.monthly[0]?.generatedAt;
+        const lastMonthKey = lastMonthly
+          ? (() => { const d = new Date(lastMonthly); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })()
+          : null;
+        if (lastMonthKey !== thisMonthKey) {
+          const text = generateMonthlyNarrative(rawEvents, rawSits, rawOpps, profile);
+          if (text) stored.monthly.unshift({ text, generatedAt: now.toISOString() });
+        }
+
+        await dbHelpers.saveNarratives(stored);
+        setNarratives(stored);
+      }
     } catch (error) {
       console.error('Error loading analytics data:', error);
     } finally {
@@ -567,7 +616,84 @@ function Analytics() {
     <div className="analytics-container">
       <div className="analytics-header">
         <h2>📈 Analytics Dashboard</h2>
-        
+
+        {/* Section 1 — Narrative (game mode only) */}
+        {gameModeEnabled && (
+          <div style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 8,
+            padding: '16px 18px',
+            marginBottom: 18,
+          }}>
+            {/* Tab bar */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+              {['daily', 'weekly', 'monthly'].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setNarrativeTab(tab)}
+                  style={{
+                    padding: '5px 14px',
+                    borderRadius: 6,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: narrativeTab === tab ? 600 : 400,
+                    background: narrativeTab === tab ? 'var(--accent)' : 'var(--bg-tertiary)',
+                    color: narrativeTab === tab ? '#fff' : 'var(--text-secondary)',
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {/* Current narrative */}
+            {(() => {
+              const entries = narratives[narrativeTab] || [];
+              if (entries.length === 0) {
+                const minMap = { daily: 1, weekly: 3, monthly: 10 };
+                return (
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', fontStyle: 'italic' }}>
+                    Not enough events yet for a {narrativeTab} narrative (minimum {minMap[narrativeTab]}).
+                  </p>
+                );
+              }
+              const current = entries[0];
+              return (
+                <div>
+                  <p style={{ color: 'var(--text-primary)', fontSize: '0.92rem', lineHeight: 1.65, margin: 0 }}>
+                    {current.text}
+                  </p>
+                  <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-secondary)', opacity: 0.7 }}>
+                    {new Date(current.generatedAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Archive */}
+            {(narratives[narrativeTab] || []).length > 1 && (
+              <div style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 14 }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                  Archive
+                </div>
+                {narratives[narrativeTab].slice(1).map((entry, i) => (
+                  <div key={i} style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', opacity: 0.7, marginBottom: 3 }}>
+                      {new Date(entry.generatedAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.6, margin: 0 }}>
+                      {entry.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Enhanced Filter Controls */}
         <div className="analytics-filters">
           <div className="filter-group">
