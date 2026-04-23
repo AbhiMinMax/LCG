@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { dbHelpers, db } from '../database/db';
 import { PATHS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
+import { TRAITS, computeUnlockedTraitIds } from '../utils/traitUtils';
 import './ProgressStyles.css';
 
 // ─── Standard mode sort options ───────────────────────────────────────────────
@@ -381,7 +382,12 @@ function BossCard({ boss }) {
 }
 
 // ─── Character header ─────────────────────────────────────────────────────────
-function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, realStreak, loginStreak, top3, expanded, onToggle }) {
+function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, realStreak, loginStreak, top3, storedTraits, expanded, onToggle }) {
+  // storedTraits: [{traitId, unlockedAt}] sorted newest first — show max 4 chips
+  const traitMap = Object.fromEntries(TRAITS.map(t => [t.id, t]));
+  const sortedTraits = [...storedTraits].sort((a, b) => new Date(b.unlockedAt) - new Date(a.unlockedAt));
+  const visibleChips = sortedTraits.slice(0, 4);
+
   return (
     <div
       onClick={onToggle}
@@ -432,6 +438,31 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, r
         </div>
       )}
 
+      {/* Trait chips (max 4, most recently earned) */}
+      {visibleChips.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+          {visibleChips.map(({ traitId }) => {
+            const t = traitMap[traitId];
+            return t ? (
+              <span
+                key={traitId}
+                style={{
+                  fontSize: '0.72rem',
+                  color: GM.textDim,
+                  background: 'rgba(128,128,128,0.12)',
+                  border: `1px solid ${GM.border}`,
+                  borderRadius: 10,
+                  padding: '2px 9px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t.name}
+              </span>
+            ) : null;
+          })}
+        </div>
+      )}
+
       {/* Stats row */}
       <div style={{ display: 'flex', gap: 20, marginTop: 12, fontSize: '0.8rem', color: GM.textDim, flexWrap: 'wrap' }}>
         <span>
@@ -451,9 +482,10 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, r
         )}
       </div>
 
-      {/* Expanded archetype detail */}
+      {/* Expanded detail */}
       {expanded && (
         <div style={{ marginTop: 14, borderTop: `1px solid ${GM.border}`, paddingTop: 14 }}>
+          {/* Archetype */}
           <div style={{ fontSize: '0.75rem', color: GM.textDim, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Archetype shaped by
           </div>
@@ -464,6 +496,31 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, r
           )) : (
             <div style={{ fontSize: '0.85rem', color: GM.textDim }}>
               Log events to define your archetype.
+            </div>
+          )}
+
+          {/* Full trait list */}
+          {sortedTraits.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: '0.75rem', color: GM.textDim, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Traits
+              </div>
+              {sortedTraits.map(({ traitId, unlockedAt }) => {
+                const t = traitMap[traitId];
+                if (!t) return null;
+                const dateStr = new Date(unlockedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                return (
+                  <div key={traitId} style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: GM.text }}>{t.name}</div>
+                    <div style={{ fontSize: '0.8rem', color: GM.textDim, marginTop: 2, fontStyle: 'italic' }}>
+                      {t.statement}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: GM.textDim, opacity: 0.6, marginTop: 2 }}>
+                      {dateStr}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -616,6 +673,7 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3 }) {
 function GameProgress() {
   const [stats, setStats]               = useState(null);
   const [loginStreak, setLoginStreak]   = useState(0);
+  const [storedTraits, setStoredTraits] = useState([]);
   const [loading, setLoading]           = useState(true);
   const [expandedOpp, setExpandedOpp]   = useState(null);
   const [headerExpanded, setHeaderExpanded] = useState(false);
@@ -623,7 +681,6 @@ function GameProgress() {
   useEffect(() => {
     (async () => {
       try {
-        // Backfill game_xp for any events logged before game mode was enabled
         await dbHelpers.backfillGameXp();
 
         const [opportunities, events, situations, profile,
@@ -638,11 +695,18 @@ function GameProgress() {
           dbHelpers.getConfig('masteryStreakMinDisplay', 3),
           dbHelpers.getConfig('opportunityBossWindow', 20),
         ]);
-        setStats(computeGameStats(
+
+        const gameStats = computeGameStats(
           opportunities, events, situations,
           { bossThreshold, bossDiss, breadthTarget, masteryMin, oppBossWindow }
-        ));
+        );
+        setStats(gameStats);
         setLoginStreak(profile.loginStreak || 0);
+
+        // Compute and persist traits
+        const unlockedIds = computeUnlockedTraitIds(opportunities, events, situations, gameStats.oppStreaks);
+        const { storedTraits: traits } = await dbHelpers.checkAndStoreTraits(unlockedIds);
+        setStoredTraits(traits);
       } catch (error) {
         console.error('[GameProgress] loadData error:', error);
       } finally {
@@ -674,6 +738,7 @@ function GameProgress() {
         realStreak={realStreak}
         loginStreak={loginStreak}
         top3={top3}
+        storedTraits={storedTraits}
         expanded={headerExpanded}
         onToggle={() => setHeaderExpanded(e => !e)}
       />

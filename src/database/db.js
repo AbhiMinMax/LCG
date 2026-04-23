@@ -651,7 +651,35 @@ export const dbHelpers = {
       loginStreak: 0,
       lastLoginDate: null,
       longestLoginStreak: 0,
+      unlockedTraits: [],
     });
+  },
+
+  // Check computed unlocked trait IDs against what's stored in the profile.
+  // Persists newly unlocked traits with their unlock timestamp.
+  // Returns { newlyUnlocked: string[], storedTraits: [{traitId, unlockedAt}] }
+  async checkAndStoreTraits(unlockedIds) {
+    try {
+      const profile = await this.getGameProfile();
+      const stored = profile.unlockedTraits || [];
+      const storedIdSet = new Set(stored.map(t => t.traitId));
+
+      const newlyUnlocked = unlockedIds.filter(id => !storedIdSet.has(id));
+
+      let storedTraits = stored;
+      if (newlyUnlocked.length > 0) {
+        const now = new Date().toISOString();
+        const newEntries = newlyUnlocked.map(traitId => ({ traitId, unlockedAt: now }));
+        storedTraits = [...stored, ...newEntries];
+        await this.setConfig('gameProfile', { ...profile, unlockedTraits: storedTraits });
+        console.log(`[checkAndStoreTraits] newly unlocked: ${newlyUnlocked.join(', ')}`);
+      }
+
+      return { newlyUnlocked, storedTraits };
+    } catch (error) {
+      console.error('[checkAndStoreTraits] error:', error);
+      return { newlyUnlocked: [], storedTraits: [] };
+    }
   },
 
   // Check today's login. Updates streak, awards daily XP (1 per active opp)
