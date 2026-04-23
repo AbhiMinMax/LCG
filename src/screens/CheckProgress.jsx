@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { dbHelpers, db } from '../database/db';
 import { PATHS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
 import { TRAITS, computeUnlockedTraitIds } from '../utils/traitUtils';
+import { consumePendingEvent, storeBossSnapshot, getPrevBossSnapshot } from '../utils/animationState';
 import './ProgressStyles.css';
 
 // ─── Standard mode sort options ───────────────────────────────────────────────
@@ -319,7 +320,7 @@ function TensionMeter({ grip, resistance }) {
 }
 
 // ─── Boss card ────────────────────────────────────────────────────────────────
-function BossCard({ boss }) {
+function BossCard({ boss, dissolving }) {
   const isWeakening = boss.state === 'weakening';
 
   const subtitle = boss.type === 'situation'
@@ -328,6 +329,7 @@ function BossCard({ boss }) {
 
   return (
     <div
+      className={dissolving ? 'boss-dissolving' : ''}
       style={{
         background: GM.bgDeep,
         border: `1px solid rgba(200,168,75,${isWeakening ? '0.15' : '0.3'})`,
@@ -382,9 +384,10 @@ function BossCard({ boss }) {
 }
 
 // ─── Character header ─────────────────────────────────────────────────────────
-function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, realStreak, loginStreak, top3, storedTraits, expanded, onToggle }) {
+function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, realStreak, loginStreak, top3, storedTraits, newlyUnlockedTraitIds, expanded, onToggle }) {
   // storedTraits: [{traitId, unlockedAt}] sorted newest first — show max 4 chips
   const traitMap = Object.fromEntries(TRAITS.map(t => [t.id, t]));
+  const newSet = new Set(newlyUnlockedTraitIds || []);
   const sortedTraits = [...storedTraits].sort((a, b) => new Date(b.unlockedAt) - new Date(a.unlockedAt));
   const visibleChips = sortedTraits.slice(0, 4);
 
@@ -446,6 +449,7 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, r
             return t ? (
               <span
                 key={traitId}
+                className={newSet.has(traitId) ? 'trait-chip-new' : ''}
                 style={{
                   fontSize: '0.72rem',
                   color: GM.textDim,
@@ -530,7 +534,7 @@ function CharacterHeader({ archetype, depthXP, badges, breadth, breadthTarget, r
 }
 
 // ─── Opportunity card (game mode) ─────────────────────────────────────────────
-function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3 }) {
+function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldPulse, levelChange, barReady }) {
   const pathKey  = opp.path || 'default';
   const pathInfo = PATHS[pathKey];
   const lvInfo   = getPathLevel(opp.game_xp || 0, pathKey);
@@ -541,8 +545,39 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3 }) {
   const barColor = rebirths > 0 ? GM.gold : GM.accent;
   const { attemptStreak = 0, masteryStreak = 0, failureRun = 0, recoveryStreak = 0, recoveryBest = 0 } = streaks || {};
 
+  // Level label crossfade: start with prevLabel if a change occurred
+  const shouldCrossfade = levelChange && levelChange.prevLabel !== lvInfo.fullLabel;
+  const [displayLabel, setDisplayLabel] = useState(
+    shouldCrossfade ? levelChange.prevLabel : lvInfo.fullLabel
+  );
+  const [labelAnimClass, setLabelAnimClass] = useState(shouldCrossfade ? 'label-fade-out' : '');
+
+  // Card pulse
+  const cardRef = useRef(null);
+
+  useEffect(() => {
+    if (shouldCrossfade) {
+      const t1 = setTimeout(() => {
+        setDisplayLabel(lvInfo.fullLabel);
+        setLabelAnimClass('label-fade-in');
+      }, 330);
+      const t2 = setTimeout(() => setLabelAnimClass(''), 800);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, []); // intentionally runs only on mount
+
+  useEffect(() => {
+    if (!shouldPulse || !cardRef.current) return;
+    cardRef.current.classList.add('opp-card-pulse');
+    const t = setTimeout(() => {
+      if (cardRef.current) cardRef.current.classList.remove('opp-card-pulse');
+    }, 900);
+    return () => clearTimeout(t);
+  }, [shouldPulse]);
+
   return (
     <div
+      ref={cardRef}
       style={{
         background: GM.bgCard,
         border: `1px solid ${GM.border}`,
@@ -569,7 +604,9 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3 }) {
           <div style={{ marginTop: 4, fontSize: '0.76rem', color: GM.textDim }}>
             {pathInfo.name}
             <span style={{ margin: '0 5px', opacity: 0.4 }}>·</span>
-            <span style={{ fontWeight: 600, color: GM.text }}>{lvInfo.fullLabel}</span>
+            <span className={labelAnimClass} style={{ fontWeight: 600, color: GM.text }}>
+              {displayLabel}
+            </span>
             {rebirths > 0 && (
               <span style={{ marginLeft: 6, color: GM.gold, fontSize: '0.8rem', letterSpacing: '0.05em' }}>
                 {getRebirthSymbols(rebirths, pathKey)}
@@ -582,10 +619,16 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3 }) {
         </span>
       </div>
 
-      {/* XP bar */}
+      {/* XP bar — animates from 0% to actual width when barReady transitions to true */}
       <div style={{ marginTop: 10 }}>
         <div style={{ height: 2, background: GM.bar, borderRadius: 1, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${barPct}%`, background: barColor, borderRadius: 1 }} />
+          <div style={{
+            height: '100%',
+            width: barReady ? `${barPct}%` : '0%',
+            background: barColor,
+            borderRadius: 1,
+            transition: barReady ? 'width 0.6s ease' : 'none',
+          }} />
         </div>
         <div style={{ marginTop: 4, fontSize: '0.7rem', color: GM.textDim, display: 'flex', justifyContent: 'space-between' }}>
           <span>{lvInfo.xpIntoLevel} / {lvInfo.xpForLevel} XP</span>
@@ -671,12 +714,17 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3 }) {
 
 // ─── Game mode progress page ──────────────────────────────────────────────────
 function GameProgress() {
-  const [stats, setStats]               = useState(null);
-  const [loginStreak, setLoginStreak]   = useState(0);
-  const [storedTraits, setStoredTraits] = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [expandedOpp, setExpandedOpp]   = useState(null);
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [stats, setStats]                       = useState(null);
+  const [loginStreak, setLoginStreak]           = useState(0);
+  const [storedTraits, setStoredTraits]         = useState([]);
+  const [newlyUnlockedTraitIds, setNewlyUnlockedTraitIds] = useState([]);
+  const [loading, setLoading]                   = useState(true);
+  const [barsReady, setBarsReady]               = useState(false);
+  const [pulsingOpps, setPulsingOpps]           = useState(null);     // Set<oppId>
+  const [levelChanges, setLevelChanges]         = useState(null);     // { [oppId]: { prevLabel } }
+  const [dissolvingBosses, setDissolvingBosses] = useState([]);
+  const [expandedOpp, setExpandedOpp]           = useState(null);
+  const [headerExpanded, setHeaderExpanded]     = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -703,15 +751,40 @@ function GameProgress() {
         setStats(gameStats);
         setLoginStreak(profile.loginStreak || 0);
 
-        // Compute and persist traits
+        // Traits
         const unlockedIds = computeUnlockedTraitIds(opportunities, events, situations, gameStats.oppStreaks);
-        const { storedTraits: traits } = await dbHelpers.checkAndStoreTraits(unlockedIds);
+        const { newlyUnlocked, storedTraits: traits } = await dbHelpers.checkAndStoreTraits(unlockedIds);
         setStoredTraits(traits);
+        setNewlyUnlockedTraitIds(newlyUnlocked);
+        if (newlyUnlocked.length > 0 && navigator.vibrate) navigator.vibrate(100);
+
+        // Boss dissolution — detect bosses that disappeared since last render
+        const prevSnap = getPrevBossSnapshot();
+        if (prevSnap) {
+          const currentKeys = new Set(gameStats.bosses.map(b => `${b.type}-${b.id}`));
+          const dissolved = Object.values(prevSnap).filter(b => !currentKeys.has(`${b.type}-${b.id}`));
+          if (dissolved.length > 0) {
+            setDissolvingBosses(dissolved);
+            setTimeout(() => setDissolvingBosses([]), 1600);
+          }
+        }
+        storeBossSnapshot(gameStats.bosses);
+
+        // Consume pending event animation state (from AddEvent)
+        const { affectedOppIds, levelChanges: lc } = consumePendingEvent();
+        if (affectedOppIds && affectedOppIds.length > 0) {
+          setPulsingOpps(new Set(affectedOppIds));
+        }
+        if (lc && lc.length > 0) {
+          setLevelChanges(Object.fromEntries(lc.map(c => [c.oppId, { prevLabel: c.prevLabel }])));
+        }
       } catch (error) {
         console.error('[GameProgress] loadData error:', error);
       } finally {
         setLoading(false);
       }
+      // Animate XP bars: render at 0% first, then transition to actual width after paint
+      requestAnimationFrame(() => setBarsReady(true));
     })();
   }, []);
 
@@ -739,6 +812,7 @@ function GameProgress() {
         loginStreak={loginStreak}
         top3={top3}
         storedTraits={storedTraits}
+        newlyUnlockedTraitIds={newlyUnlockedTraitIds}
         expanded={headerExpanded}
         onToggle={() => setHeaderExpanded(e => !e)}
       />
@@ -753,6 +827,9 @@ function GameProgress() {
             onToggle={() => setExpandedOpp(id => id === opp.id ? null : opp.id)}
             streaks={oppStreaks[opp.id]}
             masteryMin={masteryMin}
+            shouldPulse={!!(pulsingOpps && pulsingOpps.has(opp.id))}
+            levelChange={levelChanges ? levelChanges[opp.id] : null}
+            barReady={barsReady}
           />
         ))}
         {sortedOpps.length === 0 && (
@@ -763,12 +840,15 @@ function GameProgress() {
       </div>
 
       {/* Section 3 — The Frontier */}
-      {bosses.length > 0 && (
+      {(bosses.length > 0 || dissolvingBosses.length > 0) && (
         <div style={{
           marginTop: 28,
           borderTop: `1px solid ${GM.border}`,
           paddingTop: 20,
         }}>
+          {dissolvingBosses.map(boss => (
+            <BossCard key={`dissolving-${boss.type}-${boss.id}`} boss={boss} dissolving={true} />
+          ))}
           {bosses.map(boss => (
             <BossCard key={`${boss.type}-${boss.id}`} boss={boss} />
           ))}

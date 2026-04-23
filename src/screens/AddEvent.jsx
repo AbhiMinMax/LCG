@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { dbHelpers } from '../database/db';
 import { ThoughtPair } from '../components/ThoughtPassage';
 import { getPathLevel, getRebirthInfo, PATHS, getRebirthSymbols, getNewRebirthSymbol } from '../utils/pathUtils';
+import { setPendingEvent } from '../utils/animationState';
 
 const CHOICE_OPTIONS = [
   { value: 1, label: 'Misguided Action', xp: -3, color: '#dc3545' },
@@ -136,7 +137,21 @@ function AddEvent() {
 
       setLastResult(result);
       setShowSuccess(true);
-      
+
+      // Store animation state for progress page (game mode only)
+      if (gameModeEnabled) {
+        const levelChanges = [];
+        for (const updOpp of result.updatedOpportunities) {
+          const prevOpp = affectedOpportunities.find(o => o.id === updOpp.id);
+          if (prevOpp) {
+            const prevLabel = getPathLevel(prevOpp.game_xp || 0, prevOpp.path || 'default').fullLabel;
+            const newLabel  = getPathLevel(updOpp.game_xp || 0, updOpp.path || 'default').fullLabel;
+            if (prevLabel !== newLabel) levelChanges.push({ oppId: updOpp.id, prevLabel });
+          }
+        }
+        setPendingEvent(result.updatedOpportunities.map(o => o.id), levelChanges);
+      }
+
       // Reset form
       setSelectedSituation('');
       setEventTitle('');

@@ -560,6 +560,43 @@
   }
 }
 
+/* ─── Game mode animations ──────────────────────────────────────────────────── */
+
+@keyframes oppCardPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(74,127,165,0.45); }
+  60%  { box-shadow: 0 0 0 10px rgba(74,127,165,0); }
+  100% { box-shadow: 0 0 0 0 rgba(74,127,165,0); }
+}
+.opp-card-pulse { animation: oppCardPulse 0.85s ease-out; }
+
+@keyframes labelFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes labelFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.label-fade-out { animation: labelFadeOut 0.3s ease forwards; }
+.label-fade-in  { animation: labelFadeIn  0.4s ease forwards; }
+
+@keyframes traitFadeIn {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.trait-chip-new { animation: traitFadeIn 0.55s ease forwards; }
+
+@keyframes bossFadeOut {
+  0%   { opacity: 1; max-height: 220px; margin-bottom: 10px; }
+  80%  { opacity: 0; max-height: 220px; margin-bottom: 10px; }
+  100% { opacity: 0; max-height: 0;   margin-bottom: 0; }
+}
+.boss-dissolving {
+  animation: bossFadeOut 1.5s ease forwards;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 @media (max-width: 480px) {
   .stats-grid {
     grid-template-columns: 1fr;
