@@ -27,6 +27,8 @@ function Customize() {
   const [filterSituationThoughts, setFilterSituationThoughts] = useState(false);
   const [filterSituationHasEvents, setFilterSituationHasEvents] = useState(false);
   const [filterOpportunityHasEvents, setFilterOpportunityHasEvents] = useState(false);
+  const [situationSearch, setSituationSearch] = useState('');
+  const [opportunitySearch, setOpportunitySearch] = useState('');
   const [eventCountsPerSit, setEventCountsPerSit] = useState({});
   const [eventCountsPerOpp, setEventCountsPerOpp] = useState({});
   const [oppLinkedSits, setOppLinkedSits] = useState({}); // oppId → [situation title strings]
@@ -168,8 +170,16 @@ function Customize() {
     const filterAndSortSituations = () => {
       let filtered = allSituations;
 
+      if (situationSearch.trim()) {
+        const q = situationSearch.trim().toLowerCase();
+        filtered = filtered.filter(s =>
+          s.title.toLowerCase().includes(q) ||
+          (s.description && s.description.toLowerCase().includes(q))
+        );
+      }
+
       if (selectedSituationTags.length > 0) {
-        filtered = allSituations.filter(situation =>
+        filtered = filtered.filter(situation =>
           situation.tags &&
           Array.isArray(situation.tags) &&
           selectedSituationTags.some(tag => situation.tags.includes(tag))
@@ -202,7 +212,7 @@ function Customize() {
     };
 
     filterAndSortSituations();
-  }, [situationSortBy, selectedSituationTags, filterSituationThoughts, filterSituationHasEvents, eventCountsPerSit, allSituations]);
+  }, [situationSortBy, situationSearch, selectedSituationTags, filterSituationThoughts, filterSituationHasEvents, eventCountsPerSit, allSituations]);
 
   useEffect(() => {
     const filterAndSortOpportunities = () => {
@@ -210,6 +220,14 @@ function Customize() {
       setArchivedOpportunities(allOpportunities.filter(o => o.archived));
 
       let filtered = allOpportunities.filter(o => !o.archived);
+
+      if (opportunitySearch.trim()) {
+        const q = opportunitySearch.trim().toLowerCase();
+        filtered = filtered.filter(o =>
+          o.title.toLowerCase().includes(q) ||
+          (o.description && o.description.toLowerCase().includes(q))
+        );
+      }
 
       if (selectedOpportunityTags.length > 0) {
         filtered = filtered.filter(opportunity =>
@@ -247,7 +265,7 @@ function Customize() {
     };
 
     filterAndSortOpportunities();
-  }, [opportunitySortBy, selectedOpportunityTags, filterOpportunityHasEvents, eventCountsPerOpp, allOpportunities]);
+  }, [opportunitySortBy, opportunitySearch, selectedOpportunityTags, filterOpportunityHasEvents, eventCountsPerOpp, allOpportunities]);
 
   const loadData = async () => {
     try {
@@ -751,6 +769,14 @@ function Customize() {
 
           {/* Sort Controls for Situations */}
           <div className="card">
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Search situations…"
+              value={situationSearch}
+              onChange={e => setSituationSearch(e.target.value)}
+              style={{ marginBottom: '12px' }}
+            />
             <div className="sort-controls">
               <label htmlFor="situationSort" className="form-label">Sort by:</label>
               <select
@@ -1243,6 +1269,14 @@ function Customize() {
 
           {/* Sort Controls for Opportunities */}
           <div className="card">
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Search opportunities…"
+              value={opportunitySearch}
+              onChange={e => setOpportunitySearch(e.target.value)}
+              style={{ marginBottom: '12px' }}
+            />
             <div className="sort-controls">
               <label htmlFor="opportunitySort" className="form-label">Sort by:</label>
               <select
