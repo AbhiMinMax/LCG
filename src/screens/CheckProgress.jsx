@@ -825,7 +825,7 @@ function GameProgress() {
 
         const [opportunities, events, situations, profile,
                bossThreshold, bossDiss, breadthTarget, masteryMin, oppBossWindow] = await Promise.all([
-          db.opportunities.toArray(),
+          db.opportunities.filter(o => !o.archived).toArray(),
           db.events.toArray(),
           db.situations.toArray(),
           dbHelpers.getGameProfile(),

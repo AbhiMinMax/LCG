@@ -9,7 +9,6 @@ import './ProgressStyles.css';
 function Customize() {
   const [activeTab, setActiveTab] = useState('situations');
   
-  console.log('Customize component rendered, activeTab:', activeTab);
   const [situations, setSituations] = useState([]);
   const [allSituations, setAllSituations] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
@@ -49,6 +48,15 @@ function Customize() {
   const [masteryStreakMinDisplay, setMasteryStreakMinDisplay] = useState(3);
   const [opportunityBossWindow, setOpportunityBossWindow] = useState(20);
   
+  // Archived opportunities (separate from active list)
+  const [archivedOpportunities, setArchivedOpportunities] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
+
+  // Merge state
+  const [mergingOpp, setMergingOpp] = useState(null);  // opp being merged away
+  const [mergeTargetId, setMergeTargetId] = useState('');
+  const [merging, setMerging] = useState(false);
+
   // Form states
   const [showSituationForm, setShowSituationForm] = useState(false);
   const [showOpportunityForm, setShowOpportunityForm] = useState(false);
@@ -198,10 +206,13 @@ function Customize() {
 
   useEffect(() => {
     const filterAndSortOpportunities = () => {
-      let filtered = allOpportunities;
+      // Split archived from active
+      setArchivedOpportunities(allOpportunities.filter(o => o.archived));
+
+      let filtered = allOpportunities.filter(o => !o.archived);
 
       if (selectedOpportunityTags.length > 0) {
-        filtered = allOpportunities.filter(opportunity =>
+        filtered = filtered.filter(opportunity =>
           opportunity.tags &&
           Array.isArray(opportunity.tags) &&
           selectedOpportunityTags.some(tag => opportunity.tags.includes(tag))
@@ -231,10 +242,10 @@ function Customize() {
           filtered = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
           break;
       }
-      
+
       setOpportunities(filtered);
     };
-    
+
     filterAndSortOpportunities();
   }, [opportunitySortBy, selectedOpportunityTags, filterOpportunityHasEvents, eventCountsPerOpp, allOpportunities]);
 
@@ -429,25 +440,74 @@ function Customize() {
     setShowOpportunityForm(true);
   };
 
-  const handleDeleteOpportunity = async (opportunityId) => {
-    if (!confirm('Are you sure you want to delete this opportunity? This action cannot be undone.')) {
-      return;
+  const handleArchiveOpportunity = async (opportunity) => {
+    if (!confirm(`Archive "${opportunity.title}"? It will be hidden from active views but all history is preserved.`)) return;
+    try {
+      await dbHelpers.archiveOpportunity(opportunity.id);
+      await loadData();
+    } catch (error) {
+      console.error('[Customize] archiveOpportunity error:', error);
+      alert('Error archiving opportunity.');
+    }
+  };
+
+  const handleUnarchiveOpportunity = async (opportunity) => {
+    try {
+      await dbHelpers.unarchiveOpportunity(opportunity.id);
+      await loadData();
+    } catch (error) {
+      console.error('[Customize] unarchiveOpportunity error:', error);
+      alert('Error unarchiving opportunity.');
+    }
+  };
+
+  const handleDeleteOpportunityForce = async (opportunity) => {
+    const eventCount = eventCountsPerOpp[opportunity.id] || 0;
+    const confirmText = eventCount > 0
+      ? `This opportunity has ${eventCount} event${eventCount !== 1 ? 's' : ''} in history. Deleting it is permanent — event history entries will still exist but the opportunity reference will be broken.\n\nType the opportunity title to confirm deletion:`
+      : 'Delete this opportunity permanently?';
+
+    if (eventCount > 0) {
+      const typed = prompt(confirmText);
+      if (typed !== opportunity.title) {
+        if (typed !== null) alert('Title did not match. Deletion cancelled.');
+        return;
+      }
+    } else {
+      if (!confirm(confirmText)) return;
     }
 
     try {
-      // Check if opportunity has events
-      const eventCount = await db.events.where('affected_opportunities').equals(opportunityId).count();
-      if (eventCount > 0) {
-        alert('Cannot delete opportunity that has associated events. This would break event history.');
-        return;
-      }
-
-      await dbHelpers.deleteOpportunity(opportunityId);
-      loadData();
-      
+      await dbHelpers.deleteOpportunity(opportunity.id);
+      await loadData();
     } catch (error) {
-      console.error('Error deleting opportunity:', error);
-      alert('Error deleting opportunity. Please try again.');
+      console.error('[Customize] deleteOpportunity error:', error);
+      alert('Error deleting opportunity.');
+    }
+  };
+
+  const handleStartMerge = (opportunity) => {
+    setMergingOpp(opportunity);
+    setMergeTargetId('');
+  };
+
+  const handleConfirmMerge = async () => {
+    if (!mergingOpp || !mergeTargetId) return;
+    const target = allOpportunities.find(o => o.id === parseInt(mergeTargetId));
+    if (!target) return;
+    if (!confirm(`Merge "${mergingOpp.title}" into "${target.title}"?\n\nThis will:\n• Add all XP from "${mergingOpp.title}" to "${target.title}"\n• Redirect all event history to "${target.title}"\n• Permanently delete "${mergingOpp.title}"\n\nThis cannot be undone.`)) return;
+
+    setMerging(true);
+    try {
+      await dbHelpers.mergeOpportunities(target.id, mergingOpp.id);
+      setMergingOpp(null);
+      setMergeTargetId('');
+      await loadData();
+    } catch (error) {
+      console.error('[Customize] mergeOpportunities error:', error);
+      alert('Error merging opportunities.');
+    } finally {
+      setMerging(false);
     }
   };
 
@@ -1444,16 +1504,79 @@ function Customize() {
                     </button>
                     <button
                       className="btn-icon"
-                      onClick={() => handleDeleteOpportunity(opportunity.id)}
-                      title="Delete"
+                      onClick={() => handleStartMerge(opportunity)}
+                      title="Merge into another opportunity"
+                      style={{ fontSize: '0.85rem' }}
+                    >
+                      ⇄
+                    </button>
+                    <button
+                      className="btn-icon"
+                      onClick={() => handleArchiveOpportunity(opportunity)}
+                      title="Archive"
+                      style={{ fontSize: '0.85rem', opacity: 0.7 }}
+                    >
+                      📦
+                    </button>
+                    <button
+                      className="btn-icon"
+                      onClick={() => handleDeleteOpportunityForce(opportunity)}
+                      title="Delete permanently"
+                      style={{ fontSize: '0.85rem', opacity: 0.5 }}
                     >
                       🗑️
                     </button>
                   </div>
                 </div>
-                
-                {opportunity.description && (<p className="item-description">{opportunity.description}</p> )}
-                
+
+                {/* Merge panel */}
+                {mergingOpp?.id === opportunity.id && (
+                  <div style={{
+                    marginTop: 10,
+                    padding: '12px 14px',
+                    background: 'var(--bg-tertiary)',
+                    borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                  }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 8 }}>
+                      Merge "{opportunity.title}" into:
+                    </div>
+                    <select
+                      className="form-select"
+                      value={mergeTargetId}
+                      onChange={e => setMergeTargetId(e.target.value)}
+                      style={{ marginBottom: 10 }}
+                    >
+                      <option value="">— select target —</option>
+                      {opportunities.filter(o => o.id !== opportunity.id).map(o => (
+                        <option key={o.id} value={o.id}>{o.title}</option>
+                      ))}
+                    </select>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: '0.85rem', padding: '6px 14px' }}
+                        disabled={!mergeTargetId || merging}
+                        onClick={handleConfirmMerge}
+                      >
+                        {merging ? 'Merging…' : 'Merge'}
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.85rem', padding: '6px 14px' }}
+                        onClick={() => setMergingOpp(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 8 }}>
+                      XP is combined. All events are redirected to the target. This cannot be undone.
+                    </div>
+                  </div>
+                )}
+
+                {opportunity.description && (<p className="item-description">{opportunity.description}</p>)}
+
                 {opportunity.tags && opportunity.tags.length > 0 && (
                   <div style={{marginBottom: '12px'}}>
                     <strong>Tags:</strong>
@@ -1473,7 +1596,7 @@ function Customize() {
                     </div>
                   </div>
                 )}
-                
+
                 {/* Linked situations */}
                 {(oppLinkedSits[opportunity.id] || []).length > 0 && (
                   <div style={{ marginBottom: '12px' }}>
@@ -1504,6 +1627,83 @@ function Customize() {
               </div>
             ))}
           </div>
+
+          {/* Archived opportunities */}
+          {archivedOpportunities.length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              <button
+                onClick={() => setShowArchived(v => !v)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.88rem',
+                  padding: '6px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                {showArchived ? '▼' : '▶'} Archived ({archivedOpportunities.length})
+              </button>
+
+              {showArchived && (
+                <div className="items-list" style={{ marginTop: 8, opacity: 0.75 }}>
+                  {archivedOpportunities.map(opportunity => (
+                    <div key={opportunity.id} className="card item-card" style={{ borderStyle: 'dashed' }}>
+                      <div className="item-header">
+                        <div className="item-title-section">
+                          <h4 style={{ color: 'var(--text-secondary)' }}>{opportunity.title}</h4>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <span style={{
+                              background: 'rgba(108,117,125,0.15)',
+                              color: 'var(--text-secondary)',
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                            }}>
+                              📦 Archived
+                            </span>
+                            {(eventCountsPerOpp[opportunity.id] || 0) > 0 && (
+                              <span style={{
+                                background: 'rgba(25,118,210,0.1)',
+                                color: 'var(--text-secondary)',
+                                padding: '2px 8px',
+                                borderRadius: 12,
+                                fontSize: '0.72rem',
+                              }}>
+                                {eventCountsPerOpp[opportunity.id]} event{eventCountsPerOpp[opportunity.id] !== 1 ? 's' : ''} in history
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="item-actions">
+                          <button
+                            className="btn btn-secondary"
+                            style={{ fontSize: '0.78rem', padding: '4px 10px' }}
+                            onClick={() => handleUnarchiveOpportunity(opportunity)}
+                            title="Restore to active"
+                          >
+                            Restore
+                          </button>
+                          <button
+                            className="btn-icon"
+                            onClick={() => handleDeleteOpportunityForce(opportunity)}
+                            title="Delete permanently"
+                            style={{ fontSize: '0.85rem', opacity: 0.5 }}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

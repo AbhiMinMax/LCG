@@ -406,7 +406,7 @@ function Analytics() {
       if (isGameMode) {
         const [rawEvents, rawOpps, rawSits, profile, stored] = await Promise.all([
           db.events.toArray(),
-          db.opportunities.toArray(),
+          db.opportunities.filter(o => !o.archived).toArray(),
           db.situations.toArray(),
           dbHelpers.getGameProfile(),
           dbHelpers.getNarratives(),

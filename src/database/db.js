@@ -109,6 +109,19 @@ export class LifeProgressDB extends Dexie {
         if (opp.path_locked === undefined) opp.path_locked = false;
       });
     });
+
+    // Version 7: Add archived field to opportunities
+    this.version(7).stores({
+      situations: '++id, title, description, tags, isMeta, challenging_level, created_at, updated_at',
+      opportunities: '++id, title, description, tags, current_xp, game_xp, path, path_locked, archived, current_level, created_at, updated_at',
+      situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
+      events: '++id, title, situation_id, event_description, choice_value, xp_change, game_xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
+      config: '++id, key, value'
+    }).upgrade(tx => {
+      return tx.opportunities.toCollection().modify(opp => {
+        if (opp.archived === undefined) opp.archived = false;
+      });
+    });
   }
 }
 
@@ -570,10 +583,10 @@ export const dbHelpers = {
         .toArray();
       
       const opportunityIds = links.map(link => link.opportunity_id);
-      const opportunities = await db.opportunities
+      const opportunities = (await db.opportunities
         .where('id')
         .anyOf(opportunityIds)
-        .toArray();
+        .toArray()).filter(o => !o.archived);
 
       result.push({
         ...situation,
@@ -592,10 +605,8 @@ export const dbHelpers = {
       .toArray();
     
     const opportunityIds = links.map(link => link.opportunity_id);
-    return await db.opportunities
-      .where('id')
-      .anyOf(opportunityIds)
-      .toArray();
+    const opps = await db.opportunities.where('id').anyOf(opportunityIds).toArray();
+    return opps.filter(o => !o.archived);
   },
 
   // Game mode XP calculation (separate from standard mode XP).
@@ -993,7 +1004,7 @@ export const dbHelpers = {
 
   // Get all opportunities sorted by different criteria
   async getOpportunitiesSorted(sortBy = 'alphabetical') {
-    let opportunities = await db.opportunities.toArray();
+    let opportunities = (await db.opportunities.toArray()).filter(o => !o.archived);
 
     switch (sortBy) {
       case 'alphabetical':
@@ -1225,6 +1236,71 @@ export const dbHelpers = {
   async deleteOpportunity(id) {
     await db.situation_opportunities.where('opportunity_id').equals(id).delete();
     await db.opportunities.delete(id);
+  },
+
+  // Archive an opportunity (hidden from active views, history preserved)
+  async archiveOpportunity(id) {
+    await db.opportunities.update(id, { archived: true, updated_at: new Date() });
+  },
+
+  // Unarchive an opportunity
+  async unarchiveOpportunity(id) {
+    await db.opportunities.update(id, { archived: false, updated_at: new Date() });
+  },
+
+  // Merge mergedId into survivorId: combine XP, redirect event links, delete merged record
+  async mergeOpportunities(survivorId, mergedId) {
+    const [survivor, merged] = await Promise.all([
+      db.opportunities.get(survivorId),
+      db.opportunities.get(mergedId),
+    ]);
+    if (!survivor || !merged) throw new Error('Opportunity not found');
+
+    // Combine standard XP (flattened then re-leveled)
+    const survivorTotal = survivor.current_xp + (survivor.current_level - 1) * 100;
+    const mergedTotal   = merged.current_xp   + (merged.current_level   - 1) * 100;
+    const combined      = survivorTotal + mergedTotal;
+    const newLevel      = Math.floor(combined / 100) + 1;
+    const newXp         = combined % 100;
+
+    // Combine game XP
+    const newGameXp = (survivor.game_xp || 0) + (merged.game_xp || 0);
+
+    // Update survivor
+    await db.opportunities.update(survivorId, {
+      current_xp: newXp,
+      current_level: newLevel,
+      game_xp: newGameXp,
+      updated_at: new Date(),
+    });
+
+    // Redirect event links: replace mergedId with survivorId in affected_opportunities
+    const affectedEvents = await db.events.toArray();
+    const toUpdate = affectedEvents.filter(
+      ev => Array.isArray(ev.affected_opportunities) && ev.affected_opportunities.includes(mergedId)
+    );
+    for (const ev of toUpdate) {
+      const newIds = ev.affected_opportunities
+        .map(id => (id === mergedId ? survivorId : id))
+        .filter((id, idx, arr) => arr.indexOf(id) === idx); // deduplicate
+      await db.events.update(ev.id, { affected_opportunities: newIds });
+    }
+
+    // Redirect situation_opportunity links
+    const mergedLinks = await db.situation_opportunities.where('opportunity_id').equals(mergedId).toArray();
+    for (const link of mergedLinks) {
+      const existing = await db.situation_opportunities
+        .where('[situation_id+opportunity_id]')
+        .equals([link.situation_id, survivorId])
+        .first();
+      if (!existing) {
+        await db.situation_opportunities.add({ situation_id: link.situation_id, opportunity_id: survivorId });
+      }
+    }
+    await db.situation_opportunities.where('opportunity_id').equals(mergedId).delete();
+
+    // Delete merged record
+    await db.opportunities.delete(mergedId);
   },
 
   // Link a situation to opportunities
