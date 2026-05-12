@@ -4,14 +4,14 @@
 
 | # | File | Change | Status |
 |---|------|--------|--------|
-| 1 | `db.js` | Schema v8 migration + constants + all antagonist helpers + modify `addEvent` | [ ] |
-| 2 | `animationState.js` | Extend pending event to carry antagonist changes | [ ] |
-| 3 | `Customize.jsx` | Antagonists tab, create/edit/delete/archive | [ ] |
-| 4 | `CheckProgress.jsx` | Declared Antagonists section + AntagonistCard + animations | [ ] |
-| 5 | `AddEvent.jsx` | Antagonist damage preview | [ ] |
-| 6 | `CheckHistory.jsx` | ⚔ icon + popover on event cards (needs `antagonistImpacts` field from step 1) | [ ] |
-| 7 | `Analytics.jsx` | Per-situation antagonist info block | [ ] |
-| 8 | Global | ⚔ badge on situation titles where needed | [ ] |
+| 1 | `db.js` | Schema v8 migration + constants + all antagonist helpers + modify `addEvent` | [x] |
+| 2 | `animationState.js` | Extend pending event to carry antagonist changes | [x] |
+| 3 | `Customize.jsx` | Antagonists tab, create/edit/delete/archive | [x] |
+| 4 | `CheckProgress.jsx` | Declared Antagonists section + AntagonistCard + animations | [x] |
+| 5 | `AddEvent.jsx` | Antagonist damage preview | [x] |
+| 6 | `CheckHistory.jsx` | ⚔ icon + popover on event cards (needs `antagonistImpacts` field from step 1) | [x] |
+| 7 | `Analytics.jsx` | Per-situation antagonist info block | [x] |
+| 8 | Global | ⚔ badge on situation titles where needed | [x] |
 
 ---
 
