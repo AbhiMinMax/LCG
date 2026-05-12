@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { db, dbHelpers, ensureDefaultData } from '../database/db';
+import { db, dbHelpers, ensureDefaultData, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL_LABELS } from '../database/db';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import { ThoughtPair } from '../components/ThoughtPassage';
@@ -58,6 +58,20 @@ function Customize() {
   const [mergingOpp, setMergingOpp] = useState(null);  // opp being merged away
   const [mergeTargetId, setMergeTargetId] = useState('');
   const [merging, setMerging] = useState(false);
+
+  // Antagonist state
+  const [activeAntagonists, setActiveAntagonists] = useState([]);
+  const [defeatedAntagonists, setDefeatedAntagonists] = useState([]);
+  const [showAntagonistForm, setShowAntagonistForm] = useState(false);
+  const [editingAntagonist, setEditingAntagonist] = useState(null);
+  const [antagonistForm, setAntagonistForm] = useState({
+    name: '',
+    description: '',
+    startingLevel: 5,
+    taggedSituationIds: [],
+  });
+  const [antagonistSituationSearch, setAntagonistSituationSearch] = useState('');
+  const [deleteConfirmAntagonistId, setDeleteConfirmAntagonistId] = useState(null);
 
   // Form states
   const [showSituationForm, setShowSituationForm] = useState(false);
@@ -122,7 +136,18 @@ function Customize() {
     loadData();
     loadDataStats();
     loadConfig();
+    loadAntagonists();
   }, []);
+
+  const loadAntagonists = async () => {
+    try {
+      const all = await dbHelpers.getAllAntagonists();
+      setActiveAntagonists(all.filter(a => a.status === 'active'));
+      setDefeatedAntagonists(all.filter(a => a.status === 'defeated'));
+    } catch (error) {
+      console.error('[Customize] loadAntagonists error:', error);
+    }
+  };
 
   const loadConfig = async () => {
     try {
@@ -529,6 +554,79 @@ function Customize() {
     }
   };
 
+  // ─── Antagonist handlers ───────────────────────────────────────────────────
+
+  const resetAntagonistForm = () => {
+    setAntagonistForm({ name: '', description: '', startingLevel: 5, taggedSituationIds: [] });
+    setEditingAntagonist(null);
+    setShowAntagonistForm(false);
+    setAntagonistSituationSearch('');
+  };
+
+  const handleAntagonistSubmit = async (e) => {
+    e.preventDefault();
+    if (!antagonistForm.name.trim()) {
+      alert('Name is required.');
+      return;
+    }
+    try {
+      if (editingAntagonist) {
+        await dbHelpers.updateAntagonist(editingAntagonist.id, {
+          name: antagonistForm.name.trim(),
+          description: antagonistForm.description.trim(),
+          taggedSituationIds: antagonistForm.taggedSituationIds,
+        });
+      } else {
+        await dbHelpers.createAntagonist(
+          antagonistForm.name,
+          antagonistForm.description,
+          antagonistForm.startingLevel,
+          antagonistForm.taggedSituationIds
+        );
+      }
+      resetAntagonistForm();
+      await loadAntagonists();
+    } catch (error) {
+      console.error('[Customize] antagonist save error:', error);
+      alert('Error saving antagonist. Please try again.');
+    }
+  };
+
+  const handleEditAntagonist = (antagonist) => {
+    setEditingAntagonist(antagonist);
+    setAntagonistForm({
+      name: antagonist.name,
+      description: antagonist.description || '',
+      startingLevel: antagonist.startingLevel,
+      taggedSituationIds: antagonist.taggedSituationIds || [],
+    });
+    setShowAntagonistForm(true);
+  };
+
+  const handleDeleteAntagonist = async (antagonist) => {
+    if (deleteConfirmAntagonistId !== antagonist.id) {
+      setDeleteConfirmAntagonistId(antagonist.id);
+      return;
+    }
+    try {
+      await dbHelpers.deleteAntagonist(antagonist.id);
+      setDeleteConfirmAntagonistId(null);
+      await loadAntagonists();
+    } catch (error) {
+      console.error('[Customize] deleteAntagonist error:', error);
+      alert('Error deleting antagonist.');
+    }
+  };
+
+  const toggleAntagonistSituation = (sitId) => {
+    setAntagonistForm(prev => ({
+      ...prev,
+      taggedSituationIds: prev.taggedSituationIds.includes(sitId)
+        ? prev.taggedSituationIds.filter(id => id !== sitId)
+        : [...prev.taggedSituationIds, sitId],
+    }));
+  };
+
   // Form reset handlers
   const resetSituationForm = () => {
     setSituationForm({
@@ -743,6 +841,14 @@ function Customize() {
           >
             🎯 Opportunities ({opportunities.length})
           </button>
+          {gameModeEnabled && (
+            <button
+              className={`tab-button ${activeTab === 'antagonists' ? 'active' : ''}`}
+              onClick={() => setActiveTab('antagonists')}
+            >
+              ⚔️ Antagonists ({activeAntagonists.length})
+            </button>
+          )}
           <button
             className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`}
             onClick={() => setActiveTab('settings')}
@@ -1736,6 +1842,262 @@ function Customize() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Antagonists Tab */}
+      {activeTab === 'antagonists' && gameModeEnabled && (
+        <div className="tab-content">
+          <div className="card">
+            <div className="section-header">
+              <h3>⚔️ Declared Antagonists</h3>
+              <button className="btn btn-success" onClick={() => setShowAntagonistForm(true)}>
+                + Declare Antagonist
+              </button>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: 8, marginBottom: 0 }}>
+              Name a real-life struggle and fight it through your logged situations.
+            </p>
+          </div>
+
+          {/* Create / Edit form */}
+          {showAntagonistForm && (
+            <div className="card form-card">
+              <h4>{editingAntagonist ? 'Edit' : 'Declare'} Antagonist</h4>
+              <form onSubmit={handleAntagonistSubmit}>
+                <div className="form-group">
+                  <label className="form-label">Name *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={antagonistForm.name}
+                    onChange={e => setAntagonistForm({ ...antagonistForm, name: e.target.value })}
+                    placeholder="e.g., Procrastination, Social anxiety…"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Why this fight matters (private, optional)</label>
+                  <textarea
+                    className="form-input form-textarea"
+                    value={antagonistForm.description}
+                    onChange={e => setAntagonistForm({ ...antagonistForm, description: e.target.value })}
+                    placeholder="Your motivation, context, what winning looks like…"
+                    rows={3}
+                  />
+                </div>
+
+                {/* Starting level — only editable on creation */}
+                {!editingAntagonist && (
+                  <div className="form-group">
+                    <label className="form-label">Starting Level</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {[10,9,8,7,6,5,4,3,2,1].map(lvl => (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() => setAntagonistForm({ ...antagonistForm, startingLevel: lvl })}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: '8px 12px',
+                            border: antagonistForm.startingLevel === lvl ? '2px solid #8b2020' : '1px solid var(--border-color)',
+                            borderRadius: 8,
+                            background: antagonistForm.startingLevel === lvl ? 'rgba(139,32,32,0.12)' : 'var(--bg-secondary)',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, minWidth: 24, color: antagonistForm.startingLevel === lvl ? '#c0392b' : 'var(--text-secondary)' }}>
+                            {lvl}
+                          </span>
+                          <span style={{ fontWeight: antagonistForm.startingLevel === lvl ? 700 : 400, color: antagonistForm.startingLevel === lvl ? '#c0392b' : 'var(--text-primary)' }}>
+                            {ANTAGONIST_LEVEL_LABELS[lvl]}
+                          </span>
+                          <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            {ANTAGONIST_HP_POOLS[lvl]} HP
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    <small style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginTop: 6 }}>
+                      Be honest — pick the level that best describes how much this currently affects you.
+                    </small>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Tag Situations</label>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 8, marginTop: 0 }}>
+                    XP you earn on tagged situations deals damage to this antagonist.
+                  </p>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Search situations…"
+                    value={antagonistSituationSearch}
+                    onChange={e => setAntagonistSituationSearch(e.target.value)}
+                    style={{ marginBottom: 8 }}
+                  />
+                  <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 8, padding: '4px 0' }}>
+                    {allSituations
+                      .filter(s => !antagonistSituationSearch || s.title.toLowerCase().includes(antagonistSituationSearch.toLowerCase()))
+                      .map(s => (
+                        <label key={s.id} className="checkbox-item" style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={antagonistForm.taggedSituationIds.includes(s.id)}
+                            onChange={() => toggleAntagonistSituation(s.id)}
+                          />
+                          <span style={{ fontSize: '0.9rem' }}>{s.title}</span>
+                          {s.isMeta && <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Meta</span>}
+                        </label>
+                      ))
+                    }
+                    {allSituations.filter(s => !antagonistSituationSearch || s.title.toLowerCase().includes(antagonistSituationSearch.toLowerCase())).length === 0 && (
+                      <p style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>No situations match.</p>
+                    )}
+                  </div>
+                  {antagonistForm.taggedSituationIds.length > 0 && (
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: 6, marginBottom: 0 }}>
+                      {antagonistForm.taggedSituationIds.length} situation{antagonistForm.taggedSituationIds.length !== 1 ? 's' : ''} tagged
+                    </p>
+                  )}
+                </div>
+
+                <div className="form-actions">
+                  <button type="button" className="btn btn-secondary" onClick={resetAntagonistForm}>Cancel</button>
+                  <button type="submit" className="btn btn-success">
+                    {editingAntagonist ? 'Update' : 'Declare'} Antagonist
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Active antagonists list */}
+          {activeAntagonists.length === 0 && !showAntagonistForm && (
+            <div className="card empty-state">
+              <p>No active antagonists. Declare one to start fighting.</p>
+            </div>
+          )}
+
+          {activeAntagonists.map(ant => {
+            const maxHP = ANTAGONIST_HP_POOLS[ant.currentLevel];
+            const hpPct = Math.min(100, Math.max(0, (ant.currentHP / maxHP) * 100));
+            const createdDays = Math.floor((Date.now() - new Date(ant.createdAt).getTime()) / 86400000);
+            const confirming = deleteConfirmAntagonistId === ant.id;
+            const taggedTitles = allSituations.filter(s => (ant.taggedSituationIds || []).includes(s.id)).map(s => s.title);
+
+            return (
+              <div key={ant.id} className="card item-card" style={{ borderLeft: '3px solid #8b2020' }}>
+                <div className="item-header">
+                  <div className="item-title-section">
+                    <h4 style={{ color: 'var(--text-primary)' }}>⚔️ {ant.name}</h4>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ background: 'rgba(139,32,32,0.15)', color: '#c0392b', padding: '2px 8px', borderRadius: 12, fontSize: '0.78rem', fontWeight: 700 }}>
+                        {ANTAGONIST_LEVEL_LABELS[ant.currentLevel]}  Lv.{ant.currentLevel}
+                      </span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {ant.totalDamageDealt} dmg dealt · {createdDays}d fighting
+                      </span>
+                    </div>
+                  </div>
+                  <div className="item-actions">
+                    <button className="btn-icon" onClick={() => handleEditAntagonist(ant)} title="Edit">✏️</button>
+                    {confirming ? (
+                      <>
+                        <span style={{ fontSize: '0.78rem', color: '#c0392b' }}>Confirm?</span>
+                        <button
+                          className="btn-icon"
+                          onClick={() => handleDeleteAntagonist(ant)}
+                          title="Yes, delete permanently"
+                          style={{ color: '#c0392b' }}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          className="btn-icon"
+                          onClick={() => setDeleteConfirmAntagonistId(null)}
+                          title="Cancel"
+                        >
+                          ✕
+                        </button>
+                      </>
+                    ) : (
+                      <button className="btn-icon" onClick={() => handleDeleteAntagonist(ant)} title="Delete permanently" style={{ opacity: 0.5 }}>🗑️</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* HP bar */}
+                <div style={{ marginTop: 10, marginBottom: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                    <span>{ant.currentHP} / {maxHP} HP</span>
+                    <span>{Math.round(hpPct)}%</span>
+                  </div>
+                  <div style={{ height: 10, background: 'var(--bg-tertiary)', borderRadius: 5, overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                    <div style={{ height: '100%', width: `${hpPct}%`, background: '#8b2020', borderRadius: 5, transition: 'width 0.4s ease' }} />
+                  </div>
+                </div>
+
+                {ant.description && (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '8px 0 4px 0' }}>{ant.description}</p>
+                )}
+
+                {taggedTitles.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Tagged: </span>
+                    {taggedTitles.map(t => (
+                      <span key={t} style={{ fontSize: '0.75rem', background: 'rgba(139,32,32,0.1)', color: '#c0392b', padding: '1px 7px', borderRadius: 10, marginRight: 4 }}>{t}</span>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
+                  <span>Started Lv.{ant.startingLevel} ({ANTAGONIST_LEVEL_LABELS[ant.startingLevel]})</span>
+                  {ant.startingLevel > ant.currentLevel && (
+                    <span style={{ color: '#27ae60' }}>↓ {ant.startingLevel - ant.currentLevel} level{ant.startingLevel - ant.currentLevel !== 1 ? 's' : ''} cleared</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Defeated archive */}
+          {defeatedAntagonists.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <h4 style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', margin: '0 0 10px 0' }}>
+                Defeated ({defeatedAntagonists.length})
+              </h4>
+              {defeatedAntagonists.map(ant => {
+                const fightDays = ant.defeatedAt
+                  ? Math.floor((new Date(ant.defeatedAt).getTime() - new Date(ant.createdAt).getTime()) / 86400000)
+                  : null;
+                return (
+                  <div key={ant.id} className="card item-card" style={{ opacity: 0.7, borderLeft: '3px solid #27ae60' }}>
+                    <div className="item-header">
+                      <div className="item-title-section">
+                        <h4 style={{ color: 'var(--text-secondary)' }}>
+                          ✅ {ant.name}
+                        </h4>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          <span>Started Lv.{ant.startingLevel} ({ANTAGONIST_LEVEL_LABELS[ant.startingLevel]})</span>
+                          {fightDays !== null && <span>· {fightDays}d fight</span>}
+                          <span>· {ant.totalDamageDealt} total damage</span>
+                          {ant.defeatedAt && (
+                            <span>· Defeated {new Date(ant.defeatedAt).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
