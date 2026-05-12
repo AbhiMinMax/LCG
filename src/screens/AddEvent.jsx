@@ -33,11 +33,27 @@ function AddEvent() {
   const [pastEventsByChoice, setPastEventsByChoice] = useState({ 1: [], 2: [], 3: [], 4: [] });
   const [expandedChoiceSection, setExpandedChoiceSection] = useState({});
   const [taggedAntagonists, setTaggedAntagonists] = useState([]);
+  const [antagonistTaggedSitIds, setAntagonistTaggedSitIds] = useState(new Set());
 
   useEffect(() => {
     loadSituations();
     loadDynamicXpConfig();
+    loadAntagonistTaggedSits();
   }, []);
+
+  const loadAntagonistTaggedSits = async () => {
+    try {
+      const [isGame, ants] = await Promise.all([
+        dbHelpers.getConfig('gameModeEnabled', false),
+        dbHelpers.getAntagonists(),
+      ]);
+      if (!isGame) return;
+      const ids = new Set(ants.flatMap(a => a.taggedSituationIds || []));
+      setAntagonistTaggedSitIds(ids);
+    } catch (error) {
+      console.error('[AddEvent] loadAntagonistTaggedSits error:', error);
+    }
+  };
 
   const loadDynamicXpConfig = async () => {
     try {
@@ -309,7 +325,7 @@ function AddEvent() {
               <option value="">Select a situation...</option>
               {filteredSituations.map(situation => (
                 <option key={situation.id} value={situation.id}>
-                  {situation.title} {situation.tags && situation.tags.length > 0 && `[${situation.tags.join(', ')}]`}
+                  {antagonistTaggedSitIds.has(situation.id) ? '⚔ ' : ''}{situation.title}{situation.tags && situation.tags.length > 0 ? ` [${situation.tags.join(', ')}]` : ''}
                 </option>
               ))}
             </select>

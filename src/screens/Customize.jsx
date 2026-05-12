@@ -149,6 +149,10 @@ function Customize() {
     }
   };
 
+  // Returns true if the given situationId is tagged to any active antagonist
+  const isSituationTagged = (sitId) =>
+    gameModeEnabled && activeAntagonists.some(a => (a.taggedSituationIds || []).includes(sitId));
+
   const loadConfig = async () => {
     try {
       const [dynamicXp, cloudSync, gameMode, sitBoss, bossDiss, breadth, mastery, oppBoss] = await Promise.all([
@@ -1246,7 +1250,12 @@ function Customize() {
               <div key={situation.id} className="card item-card">
                 <div className="item-header">
                   <div className="item-title-section">
-                    <h4>{situation.title}</h4>
+                    <h4>
+                      {situation.title}
+                      {isSituationTagged(situation.id) && (
+                        <span style={{ marginLeft: 6, fontSize: '0.78rem', color: '#8b2020' }} title="Tagged to an active antagonist">⚔</span>
+                      )}
+                    </h4>
                     <div className="situation-stats" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{
                         background: situation.isMeta ? 'var(--bg-tertiary)' : 'rgba(40,167,69,0.15)',
