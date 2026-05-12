@@ -171,7 +171,7 @@ function computeGameAnalyticsData(rawEvents, rawOpps, rawSits, profile) {
 const CHOICE_LABELS = { 1: 'Misguided', 2: "Didn't try", 3: 'Tried', 4: 'Well done' };
 const CHOICE_COLORS = { 1: '#c0392b', 2: '#e67e22', 3: '#27ae60', 4: '#2980b9' };
 
-function GameStatsSection({ rawEvents, rawOpps, rawSits, profile }) {
+function GameStatsSection({ rawEvents, rawOpps, rawSits, profile, antagonists = [] }) {
   const [expanded, setExpanded] = useState({ overall: true, opportunities: false, situations: false, breadth: false, bossHistory: false });
   const toggle = key => setExpanded(s => ({ ...s, [key]: !s[key] }));
 
@@ -179,6 +179,23 @@ function GameStatsSection({ rawEvents, rawOpps, rawSits, profile }) {
     () => computeGameAnalyticsData(rawEvents, rawOpps, rawSits, profile),
     [rawEvents, rawOpps, rawSits, profile]
   );
+
+  // Per-situation antagonist damage: { [sitId]: [{ ant, damageThisSituation }] }
+  const sitAntagonistDamage = useMemo(() => {
+    const result = {};
+    for (const ant of antagonists) {
+      for (const sitId of (ant.taggedSituationIds || [])) {
+        const damage = rawEvents
+          .filter(ev => ev.situation_id === sitId && Array.isArray(ev.antagonistImpacts))
+          .flatMap(ev => ev.antagonistImpacts)
+          .filter(imp => imp.antagonistId === ant.id && imp.hpDelta < 0)
+          .reduce((s, imp) => s + Math.abs(imp.hpDelta), 0);
+        if (!result[sitId]) result[sitId] = [];
+        result[sitId].push({ ant, damage });
+      }
+    }
+    return result;
+  }, [antagonists, rawEvents]);
 
   const SectionRow = ({ label, value }) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
@@ -269,6 +286,14 @@ function GameStatsSection({ rawEvents, rawOpps, rawSits, profile }) {
                 {currentStreak > 0 && <span style={{ color: '#27ae60', marginLeft: 4 }}>↑ {currentStreak} streak</span>}
                 {currentFailRun > 0 && <span style={{ color: '#c0392b', marginLeft: 4 }}>↓ {currentFailRun} run</span>}
               </div>
+              {/* Antagonist info for this situation */}
+              {(sitAntagonistDamage[sit.id] || []).map(({ ant, damage }) => (
+                <div key={ant.id} style={{ marginTop: 6, fontSize: '0.72rem', color: '#8b2020', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span>⚔ {ant.name}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Lv.{ant.currentLevel}</span>
+                  {damage > 0 && <span style={{ color: '#27ae60' }}>{damage} damage through this situation</span>}
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -449,7 +474,8 @@ function Analytics() {
 
         await dbHelpers.saveNarratives(stored);
         setNarratives(stored);
-        setGameRawData({ rawEvents, rawOpps, rawSits, profile });
+        const activeAnts = await dbHelpers.getAntagonists();
+        setGameRawData({ rawEvents, rawOpps, rawSits, profile, antagonists: activeAnts });
       }
     } catch (error) {
       console.error('Error loading analytics data:', error);
@@ -995,6 +1021,7 @@ function Analytics() {
             rawOpps={gameRawData.rawOpps}
             rawSits={gameRawData.rawSits}
             profile={gameRawData.profile}
+            antagonists={gameRawData.antagonists || []}
           />
         )}
 
