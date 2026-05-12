@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { dbHelpers } from '../database/db';
+import { dbHelpers, ANTAGONIST_LEVEL_LABELS } from '../database/db';
 import { ThoughtPair } from '../components/ThoughtPassage';
 import { getPathLevel, getRebirthInfo, PATHS, getRebirthSymbols, getNewRebirthSymbol } from '../utils/pathUtils';
 import { setPendingEvent } from '../utils/animationState';
@@ -32,6 +32,7 @@ function AddEvent() {
   const [lastResult, setLastResult] = useState(null);
   const [pastEventsByChoice, setPastEventsByChoice] = useState({ 1: [], 2: [], 3: [], 4: [] });
   const [expandedChoiceSection, setExpandedChoiceSection] = useState({});
+  const [taggedAntagonists, setTaggedAntagonists] = useState([]);
 
   useEffect(() => {
     loadSituations();
@@ -55,9 +56,10 @@ function AddEvent() {
     const loadSituationData = async () => {
       try {
         const sitId = parseInt(selectedSituation);
-        const [opportunities, allPastEvents] = await Promise.all([
+        const [opportunities, allPastEvents, activeAnts] = await Promise.all([
           dbHelpers.getOpportunitiesForSituation(sitId),
           dbHelpers.getEventsForSituation(sitId),
+          dbHelpers.getAntagonists(),
         ]);
         setAffectedOpportunities(opportunities);
         setCurrentSituation(situations.find(s => s.id === sitId));
@@ -67,6 +69,7 @@ function AddEvent() {
         }
         setPastEventsByChoice(grouped);
         setExpandedChoiceSection({});
+        setTaggedAntagonists(activeAnts.filter(a => (a.taggedSituationIds || []).includes(sitId)));
 
         // Reload dynamic XP config to ensure it's current
         await loadDynamicXpConfig();
@@ -81,6 +84,7 @@ function AddEvent() {
       setAffectedOpportunities([]);
       setCurrentSituation(null);
       setPastEventsByChoice({ 1: [], 2: [], 3: [], 4: [] });
+      setTaggedAntagonists([]);
     }
   }, [selectedSituation, situations]);
 
@@ -149,7 +153,7 @@ function AddEvent() {
             if (prevLabel !== newLabel) levelChanges.push({ oppId: updOpp.id, prevLabel });
           }
         }
-        setPendingEvent(result.updatedOpportunities.map(o => o.id), levelChanges);
+        setPendingEvent(result.updatedOpportunities.map(o => o.id), levelChanges, result.antagonistImpacts || []);
       }
 
       // Reset form
@@ -424,6 +428,40 @@ function AddEvent() {
             {gameModeEnabled && currentSituation && (
               <div style={{ fontSize: '0.82em', color: '#666', marginTop: '6px' }}>
                 {currentSituation.isMeta ? '🪞 Meta situation — standard XP' : '🌍 Real situation — positive XP doubled ⚡'}
+              </div>
+            )}
+
+            {/* Antagonist damage preview (game mode only) */}
+            {gameModeEnabled && taggedAntagonists.length > 0 && (
+              <div style={{ marginTop: 14, padding: '10px 12px', background: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 8 }}>
+                {taggedAntagonists.map(ant => {
+                  let previewXp = 0;
+                  if (selectedChoice) {
+                    let base = GAME_BASE_XP[parseInt(selectedChoice)] ?? 0;
+                    if (dynamicXpEnabled && currentSituation?.challenging_level) {
+                      base = Math.round(base * Math.max(1.0, currentSituation.challenging_level / 3));
+                    }
+                    if (base > 0 && !currentSituation?.isMeta) base *= 2;
+                    previewXp = base;
+                  }
+                  const isDamage = previewXp > 0;
+                  const isRecovery = previewXp < 0;
+                  const choiceLabel = CHOICE_OPTIONS.find(c => c.value === parseInt(selectedChoice))?.label || '';
+                  return (
+                    <div key={ant.id} style={{ marginBottom: 6, fontSize: '0.82rem' }}>
+                      <div style={{ fontWeight: 600, color: '#8b2020' }}>
+                        ⚔ {ant.name} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>Lv.{ant.currentLevel} — {ANTAGONIST_LEVEL_LABELS[ant.currentLevel]}</span>
+                      </div>
+                      {selectedChoice ? (
+                        <div style={{ marginTop: 2, color: isDamage ? '#27ae60' : isRecovery ? '#c0392b' : 'var(--text-secondary)', fontSize: '0.78rem' }}>
+                          {choiceLabel} will {isDamage ? `deal ${previewXp} damage` : isRecovery ? `allow ${Math.abs(previewXp)} recovery` : 'have no effect'}
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: 2, color: 'var(--text-secondary)', fontSize: '0.78rem' }}>Select a choice to see damage</div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
