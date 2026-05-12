@@ -3,6 +3,7 @@ import { dbHelpers, db, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL_LABELS } from '../
 import { PATHS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
 import { TRAITS, computeUnlockedTraitIds } from '../utils/traitUtils';
 import { consumePendingEvent, storeBossSnapshot, getPrevBossSnapshot } from '../utils/animationState';
+import { computeOppStreaks, computeBosses } from '../utils/bossUtils';
 import './ProgressStyles.css';
 
 // ─── Inline sparkline ────────────────────────────────────────────────────────
@@ -45,182 +46,6 @@ const GM = {
   border:  'var(--border-color)',
   bar:     'rgba(128,128,128,0.18)', // XP bar empty track — neutral in both themes
 };
-
-// ─── Per-opportunity streak computation ──────────────────────────────────────
-// Returns { attemptStreak, masteryStreak, failureRun, recoveryStreak, recoveryBest }
-function computeOppStreaks(oppId, sortedEvents /* newest first */) {
-  const evs = sortedEvents.filter(
-    e => Array.isArray(e.affected_opportunities) && e.affected_opportunities.includes(oppId)
-  );
-
-  const isSuccess = v => v === 3 || v === 4;
-  const isFailure = v => v === 1 || v === 2;
-
-  // Attempt streak: consecutive success newest → oldest
-  let attemptStreak = 0;
-  for (const ev of evs) {
-    if (isSuccess(ev.choice_value)) attemptStreak++;
-    else break;
-  }
-
-  // Mastery streak: consecutive well_done (4) newest → oldest
-  let masteryStreak = 0;
-  for (const ev of evs) {
-    if (ev.choice_value === 4) masteryStreak++;
-    else break;
-  }
-
-  // Failure run: consecutive failure newest → oldest
-  let failureRun = 0;
-  for (const ev of evs) {
-    if (isFailure(ev.choice_value)) failureRun++;
-    else break;
-  }
-
-  // Recovery streak: after most recent failure, count consecutive successes
-  // Also compute personal best recovery streak across all history
-  let recoveryStreak = 0;
-  let recoveryBest = 0;
-
-  // Find index of most recent failure
-  const firstFailIdx = evs.findIndex(e => isFailure(e.choice_value));
-  if (firstFailIdx > 0) {
-    // There are successes before the failure (newest first) → those are the current recovery
-    recoveryStreak = firstFailIdx; // count of successes before first failure
-  }
-
-  // Compute all recovery runs for personal best
-  let currentRun = 0;
-  let inRecovery = false;
-  for (let i = evs.length - 1; i >= 0; i--) {
-    const cv = evs[i].choice_value;
-    if (isFailure(cv)) {
-      if (inRecovery && currentRun > recoveryBest) recoveryBest = currentRun;
-      currentRun = 0;
-      inRecovery = true;
-    } else if (inRecovery) {
-      currentRun++;
-    }
-  }
-  if (inRecovery && currentRun > recoveryBest) recoveryBest = currentRun;
-
-  return { attemptStreak, masteryStreak, failureRun, recoveryStreak, recoveryBest };
-}
-
-// ─── Boss computation ─────────────────────────────────────────────────────────
-// sorted        = all events newest → oldest (pre-sorted by caller)
-// sitMap        = { id → situation }
-// failThreshold = consecutive failures to spawn a situation boss (default 5)
-// dissThreshold = consecutive successes to dissolve a boss (default 5)
-// oppWindow     = events to look back for opportunity boss XP trend (default 20)
-function computeBosses(opportunities, sorted, sitMap, failThreshold = 5, dissThreshold = 5, oppWindow = 20) {
-  const isSuccess = v => v === 3 || v === 4;
-  const isFailure = v => v === 1 || v === 2;
-  const bosses = [];
-
-  // ── Situation bosses ──────────────────────────────────────────────────────
-  const seenSitIds = [...new Set(sorted.map(e => e.situation_id))];
-
-  for (const sitId of seenSitIds) {
-    const sit = sitMap[sitId];
-    if (!sit) continue;
-
-    const sitEvs = sorted.filter(e => e.situation_id === sitId);
-    if (sitEvs.length === 0) continue;
-
-    // Count consecutive successes at the head of history (newest → oldest)
-    let successStreak = 0;
-    for (const ev of sitEvs) {
-      if (isSuccess(ev.choice_value)) successStreak++;
-      else break;
-    }
-
-    // Count the failure run that immediately precedes the success streak
-    let failureRun = 0;
-    for (const ev of sitEvs.slice(successStreak)) {
-      if (isFailure(ev.choice_value)) failureRun++;
-      else break;
-    }
-
-    if (failureRun < failThreshold) continue;          // Boss not triggered
-    if (successStreak >= dissThreshold) continue;      // Boss dissolved — don't show
-
-    const state = successStreak >= 1 ? 'weakening' : 'active';
-
-    // Last success timestamp (for display and grip calculation)
-    const lastSuccessEv = sitEvs.find(e => isSuccess(e.choice_value));
-    const lastSuccessDaysAgo = lastSuccessEv
-      ? Math.floor((Date.now() - new Date(lastSuccessEv.timestamp).getTime()) / (1000 * 60 * 60 * 24))
-      : null;
-
-    // Grip: failure run magnitude + time pressure + difficulty
-    const diff = sit.challenging_level || 3;
-    const timePressure = lastSuccessDaysAgo !== null ? Math.min(lastSuccessDaysAgo * 0.5, 15) : 15;
-    const grip = failureRun * 1.5 + timePressure + (diff - 1) * 0.5;
-
-    // Resistance: recovery successes
-    const resistance = successStreak * 3;
-
-    bosses.push({
-      type: 'situation',
-      id: sitId,
-      title: sit.title,
-      state,
-      grip: Math.max(0.1, grip),
-      resistance: Math.max(0, resistance),
-      failureRun,
-      successStreak,
-      lastSuccessDaysAgo,
-    });
-  }
-
-  // ── Opportunity bosses ────────────────────────────────────────────────────
-  for (const opp of opportunities) {
-    const oppEvs = sorted.filter(
-      e => Array.isArray(e.affected_opportunities) && e.affected_opportunities.includes(opp.id)
-    );
-
-    if (oppEvs.length < oppWindow) continue; // Need ≥ oppWindow events
-
-    const last20 = oppEvs.slice(0, oppWindow);
-    const netXp = last20.reduce((s, e) => s + (e.game_xp_change || 0), 0);
-
-    if (netXp >= 0) continue; // Net positive — no boss
-
-    // Attempt streak for dissolution check (same 5+5 rule)
-    let successStreak = 0;
-    for (const ev of oppEvs) {
-      if (isSuccess(ev.choice_value)) successStreak++;
-      else break;
-    }
-    if (successStreak >= dissThreshold * 2) continue; // Dissolved (weakening + dissolution)
-
-    const state = successStreak >= dissThreshold ? 'weakening' : 'active';
-
-    const negXp = last20.reduce((s, e) => {
-      const gxp = e.game_xp_change || 0;
-      return gxp < 0 ? s + Math.abs(gxp) : s;
-    }, 0);
-    const posXp = last20.reduce((s, e) => {
-      const gxp = e.game_xp_change || 0;
-      return gxp > 0 ? s + gxp : s;
-    }, 0);
-
-    bosses.push({
-      type: 'opportunity',
-      id: opp.id,
-      title: opp.title,
-      state,
-      grip: Math.max(0.1, negXp),
-      resistance: Math.max(0, posXp),
-      netXp,
-      successStreak,
-      lastSuccessDaysAgo: null,
-    });
-  }
-
-  return bosses;
-}
 
 // ─── Random challenge computation ─────────────────────────────────────────────
 // Priority: Reversal > Edge > Resurgence. Returns one challenge or null.
@@ -936,6 +761,7 @@ function GameProgress() {
   const [dissolvingBosses, setDissolvingBosses] = useState([]);
   const [expandedOpp, setExpandedOpp]           = useState(null);
   const [headerExpanded, setHeaderExpanded]     = useState(false);
+  const [sectionsExpanded, setSectionsExpanded] = useState({ opportunities: false, antagonists: false, frontier: false });
 
   // Antagonist state
   const [antagonists, setAntagonists]               = useState([]);
@@ -1069,36 +895,57 @@ function GameProgress() {
       />
 
       {/* Section 2 — Opportunities */}
-      <div style={{ marginTop: 16 }}>
-        {sortedOpps.map(opp => (
-          <GameOppCard
-            key={opp.id}
-            opp={opp}
-            expanded={expandedOpp === opp.id}
-            onToggle={() => setExpandedOpp(id => id === opp.id ? null : opp.id)}
-            streaks={oppStreaks[opp.id]}
-            masteryMin={masteryMin}
-            shouldPulse={!!(pulsingOpps && pulsingOpps.has(opp.id))}
-            levelChange={levelChanges ? levelChanges[opp.id] : null}
-            barReady={barsReady}
-            isEdgeOpp={!!(randomChallenge?.type === 'edge' && randomChallenge.oppId === opp.id)}
-            sparklineValues={oppSparklines ? oppSparklines[opp.id] : null}
-          />
-        ))}
-        {sortedOpps.length === 0 && (
-          <div style={{ color: GM.textDim, fontSize: '0.9rem', textAlign: 'center', padding: '40px 20px' }}>
-            No opportunities yet. Add some in Customize.
-          </div>
+      <div style={{ marginTop: 16, borderTop: `1px solid ${GM.border}`, paddingTop: 12 }}>
+        <button
+          onClick={() => setSectionsExpanded(s => ({ ...s, opportunities: !s.opportunities }))}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', background: 'none', border: 'none', padding: '4px 0 8px', cursor: 'pointer', color: GM.textDim }}
+        >
+          <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Opportunities</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem' }}>
+            <span>{sortedOpps.length}</span>
+            <span style={{ fontSize: '0.65rem' }}>{sectionsExpanded.opportunities ? '▼' : '▶'}</span>
+          </span>
+        </button>
+        {sectionsExpanded.opportunities && (
+          <>
+            {sortedOpps.map(opp => (
+              <GameOppCard
+                key={opp.id}
+                opp={opp}
+                expanded={expandedOpp === opp.id}
+                onToggle={() => setExpandedOpp(id => id === opp.id ? null : opp.id)}
+                streaks={oppStreaks[opp.id]}
+                masteryMin={masteryMin}
+                shouldPulse={!!(pulsingOpps && pulsingOpps.has(opp.id))}
+                levelChange={levelChanges ? levelChanges[opp.id] : null}
+                barReady={barsReady}
+                isEdgeOpp={!!(randomChallenge?.type === 'edge' && randomChallenge.oppId === opp.id)}
+                sparklineValues={oppSparklines ? oppSparklines[opp.id] : null}
+              />
+            ))}
+            {sortedOpps.length === 0 && (
+              <div style={{ color: GM.textDim, fontSize: '0.9rem', textAlign: 'center', padding: '40px 20px' }}>
+                No opportunities yet. Add some in Customize.
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* Section 3 — Declared Antagonists */}
       {antagonists.length > 0 && (
-        <div style={{ marginTop: 28, borderTop: `1px solid ${GM.border}`, paddingTop: 20 }}>
-          <div style={{ fontSize: '0.72rem', color: GM.textDim, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
-            Declared Antagonists
-          </div>
-          {antagonists.map(ant => {
+        <div style={{ marginTop: 16, borderTop: `1px solid ${GM.border}`, paddingTop: 12 }}>
+          <button
+            onClick={() => setSectionsExpanded(s => ({ ...s, antagonists: !s.antagonists }))}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', background: 'none', border: 'none', padding: '4px 0 8px', cursor: 'pointer', color: GM.textDim }}
+          >
+            <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Declared Antagonists</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem' }}>
+              <span>{antagonists.length}</span>
+              <span style={{ fontSize: '0.65rem' }}>{sectionsExpanded.antagonists ? '▼' : '▶'}</span>
+            </span>
+          </button>
+          {sectionsExpanded.antagonists && antagonists.map(ant => {
             const taggedTitles = (ant.taggedSituationIds || [])
               .map(id => antagonistSituations[id])
               .filter(Boolean);
@@ -1118,21 +965,31 @@ function GameProgress() {
 
       {/* Section 4 — The Frontier */}
       {(bosses.length > 0 || dissolvingBosses.length > 0 || (randomChallenge && randomChallenge.type !== 'edge')) && (
-        <div style={{
-          marginTop: 28,
-          borderTop: `1px solid ${GM.border}`,
-          paddingTop: 20,
-        }}>
-          {dissolvingBosses.map(boss => (
-            <BossCard key={`dissolving-${boss.type}-${boss.id}`} boss={boss} dissolving={true} />
-          ))}
-          {bosses.map(boss => (
-            <BossCard key={`${boss.type}-${boss.id}`} boss={boss} />
-          ))}
-          {randomChallenge && randomChallenge.type !== 'edge' && (
-            <div style={{ fontSize: '0.85rem', color: GM.textDim, marginTop: bosses.length > 0 ? 12 : 0, padding: '0 4px', fontStyle: 'italic' }}>
-              {randomChallenge.text}
-            </div>
+        <div style={{ marginTop: 16, borderTop: `1px solid ${GM.border}`, paddingTop: 12 }}>
+          <button
+            onClick={() => setSectionsExpanded(s => ({ ...s, frontier: !s.frontier }))}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', background: 'none', border: 'none', padding: '4px 0 8px', cursor: 'pointer', color: GM.textDim }}
+          >
+            <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.07em' }}>The Frontier</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem' }}>
+              <span>{bosses.length + dissolvingBosses.length}</span>
+              <span style={{ fontSize: '0.65rem' }}>{sectionsExpanded.frontier ? '▼' : '▶'}</span>
+            </span>
+          </button>
+          {sectionsExpanded.frontier && (
+            <>
+              {dissolvingBosses.map(boss => (
+                <BossCard key={`dissolving-${boss.type}-${boss.id}`} boss={boss} dissolving={true} />
+              ))}
+              {bosses.map(boss => (
+                <BossCard key={`${boss.type}-${boss.id}`} boss={boss} />
+              ))}
+              {randomChallenge && randomChallenge.type !== 'edge' && (
+                <div style={{ fontSize: '0.85rem', color: GM.textDim, marginTop: bosses.length > 0 ? 12 : 0, padding: '0 4px', fontStyle: 'italic' }}>
+                  {randomChallenge.text}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

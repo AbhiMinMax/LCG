@@ -4,6 +4,7 @@ import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import { ThoughtPair } from '../components/ThoughtPassage';
 import { PATHS, PATH_KEYS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
+import { computeBosses } from '../utils/bossUtils';
 import './ProgressStyles.css';
 
 function Customize() {
@@ -58,6 +59,9 @@ function Customize() {
   const [mergingOpp, setMergingOpp] = useState(null);  // opp being merged away
   const [mergeTargetId, setMergeTargetId] = useState('');
   const [merging, setMerging] = useState(false);
+
+  // Boss state per situation: { [sitId]: 'active' | 'weakening' }
+  const [sitBossMap, setSitBossMap] = useState({});
 
   // Antagonist state
   const [activeAntagonists, setActiveAntagonists] = useState([]);
@@ -173,6 +177,22 @@ function Customize() {
       setBreadthWeeklyTarget(breadth);
       setMasteryStreakMinDisplay(mastery);
       setOpportunityBossWindow(oppBoss);
+
+      if (gameMode) {
+        const [sitsForBoss, eventsForBoss, oppsForBoss] = await Promise.all([
+          db.situations.toArray(),
+          db.events.toArray(),
+          db.opportunities.filter(o => !o.archived).toArray(),
+        ]);
+        const sitMap = Object.fromEntries(sitsForBoss.map(s => [s.id, s]));
+        const sorted = [...eventsForBoss].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        const bossList = computeBosses(oppsForBoss, sorted, sitMap, sitBoss, bossDiss, oppBoss);
+        const bossMap = {};
+        for (const boss of bossList) {
+          if (boss.type === 'situation') bossMap[boss.id] = boss.state;
+        }
+        setSitBossMap(bossMap);
+      }
     } catch (error) {
       console.error('Error loading config:', error);
     }
@@ -1254,6 +1274,12 @@ function Customize() {
                       {situation.title}
                       {isSituationTagged(situation.id) && (
                         <span style={{ marginLeft: 6, fontSize: '0.78rem', color: '#8b2020' }} title="Tagged to an active antagonist">⚔</span>
+                      )}
+                      {gameModeEnabled && sitBossMap[situation.id] === 'active' && (
+                        <span style={{ marginLeft: 6, fontSize: '0.72rem', background: 'rgba(220,53,69,0.15)', color: '#dc3545', padding: '1px 6px', borderRadius: 10, fontWeight: 600 }} title="Boss active on this situation">Boss Active</span>
+                      )}
+                      {gameModeEnabled && sitBossMap[situation.id] === 'weakening' && (
+                        <span style={{ marginLeft: 6, fontSize: '0.72rem', background: 'rgba(128,128,128,0.12)', color: 'var(--text-secondary)', padding: '1px 6px', borderRadius: 10, fontWeight: 600 }} title="Boss weakening on this situation">Weakening</span>
                       )}
                     </h4>
                     <div className="situation-stats" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>

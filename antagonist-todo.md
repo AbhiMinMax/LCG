@@ -108,10 +108,10 @@
 
 | # | File(s) | Change | Status |
 |---|---------|--------|--------|
-| R1 | `db.js` | Update `ANTAGONIST_LEVEL_LABELS` to new names (Sovereign → Ash) | [ ] |
-| R2 | `src/utils/bossUtils.js` (new) | Extract boss computation logic from CheckProgress into shared util | [ ] |
-| R3 | `CheckProgress.jsx` | Make Opportunities, Antagonists, Frontier sections collapsible; collapsed by default | [ ] |
-| R4 | `Customize.jsx` | Show reactive boss badge per situation (active / weakening) | [ ] |
+| R1 | `db.js` | Update `ANTAGONIST_LEVEL_LABELS` to new names (Sovereign → Ash) | [x] |
+| R2 | `src/utils/bossUtils.js` (new) | Extract boss computation logic from CheckProgress into shared util | [x] |
+| R3 | `CheckProgress.jsx` | Make Opportunities, Antagonists, Frontier sections collapsible; collapsed by default | [x] |
+| R4 | `Customize.jsx` | Show reactive boss badge per situation (active / weakening) | [x] |
 
 ### R1 — New level labels
 ```
