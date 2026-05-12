@@ -145,9 +145,9 @@ export const ANTAGONIST_HP_POOLS = {
 };
 
 export const ANTAGONIST_LEVEL_LABELS = {
-  10: 'Dominant', 9: 'Consuming', 8: 'Pervasive', 7: 'Persistent',
-  6: 'Present',   5: 'Recurring', 4: 'Occasional', 3: 'Weakening',
-  2: 'Residual',  1: 'Shadow',
+  10: 'Sovereign', 9: 'Titan',    8: 'Tyrant', 7: 'Force',
+  6:  'Weight',    5: 'Presence', 4: 'Fracture', 3: 'Ruin',
+  2:  'Husk',      1: 'Ash',
 };
 
 // Database helper functions

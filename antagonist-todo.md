@@ -101,3 +101,47 @@
 - **`antagonistImpacts` field on events** — stored at log time for History page replay
 - **Damage values reuse `calculateGameXpChange()`** — no new math
 - **Game mode gate** — all antagonist UI hidden when `gameModeEnabled = false`
+
+---
+
+## Round 2 — Follow-up Changes
+
+| # | File(s) | Change | Status |
+|---|---------|--------|--------|
+| R1 | `db.js` | Update `ANTAGONIST_LEVEL_LABELS` to new names (Sovereign → Ash) | [ ] |
+| R2 | `src/utils/bossUtils.js` (new) | Extract boss computation logic from CheckProgress into shared util | [ ] |
+| R3 | `CheckProgress.jsx` | Make Opportunities, Antagonists, Frontier sections collapsible; collapsed by default | [ ] |
+| R4 | `Customize.jsx` | Show reactive boss badge per situation (active / weakening) | [ ] |
+
+### R1 — New level labels
+```
+10 — Sovereign
+ 9 — Titan
+ 8 — Tyrant
+ 7 — Force
+ 6 — Weight
+ 5 — Presence
+ 4 — Fracture
+ 3 — Ruin
+ 2 — Husk
+ 1 — Ash
+```
+
+### R2 — Boss utils extraction
+- Move `computeBosses()` and `computeOppStreaks()` from `CheckProgress.jsx` into `src/utils/bossUtils.js`
+- `CheckProgress.jsx` imports from there (no behavior change)
+- `Customize.jsx` imports and uses `computeBosses()` to compute per-situation boss state
+
+### R3 — Progress page collapsible sections
+- Add `sectionsExpanded = { opportunities: false, antagonists: false, frontier: false }` state
+- Each section gets a clickable header row showing section name + item count + ▶/▼
+- Content hidden when collapsed; all start collapsed
+- Character Header section already has its own toggle — leave as-is
+
+### R4 — Customize boss badge per situation
+- Load all events in `loadData`
+- Load boss thresholds from config (already loaded)
+- Call `computeBosses()` (from bossUtils) to get current boss list
+- On each situation card, if that situation has an active boss: show badge
+  - Active: red "Boss Active" badge
+  - Weakening: dimmed "Weakening" badge
