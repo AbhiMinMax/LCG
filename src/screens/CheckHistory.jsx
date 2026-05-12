@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { dbHelpers } from '../database/db';
+import { dbHelpers, ANTAGONIST_LEVEL_LABELS } from '../database/db';
 import { ThoughtPassage } from '../components/ThoughtPassage';
 import './ProgressStyles.css';
 
@@ -25,6 +25,7 @@ function CheckHistory() {
   const [sortOrder, setSortOrder] = useState('desc');
   const [filterThoughts, setFilterThoughts] = useState(false);
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
+  const [openAntagonistPopover, setOpenAntagonistPopover] = useState(null); // eventId
 
   useEffect(() => {
     loadEvents();
@@ -253,6 +254,26 @@ function CheckHistory() {
                   >
                     {getDisplayXp(event) > 0 ? '+' : ''}{getDisplayXp(event)} XP
                   </span>
+                  {gameModeEnabled && event.antagonistImpacts?.length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenAntagonistPopover(prev => prev === event.id ? null : event.id);
+                      }}
+                      title="Antagonist impacts"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.85em',
+                        padding: '2px 4px',
+                        color: '#8b2020',
+                        lineHeight: 1
+                      }}
+                    >
+                      ⚔
+                    </button>
+                  )}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
                     title="Delete event"
@@ -285,6 +306,31 @@ function CheckHistory() {
                   {CHOICE_LABELS[event.choice_value]}
                 </div>
               </div>
+
+              {/* Antagonist impact popover */}
+              {openAntagonistPopover === event.id && event.antagonistImpacts?.length > 0 && (
+                <div style={{ padding: '10px 14px', background: 'rgba(139,32,32,0.06)', borderTop: '1px solid rgba(139,32,32,0.2)', fontSize: '0.82rem' }}>
+                  {event.antagonistImpacts.map((impact, i) => (
+                    <div key={i} style={{ marginBottom: i < event.antagonistImpacts.length - 1 ? 8 : 0 }}>
+                      <span style={{ fontWeight: 600, color: '#8b2020' }}>⚔ {impact.antagonistName}</span>
+                      <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>
+                        Lv.{impact.levelAtTime} ({ANTAGONIST_LEVEL_LABELS[impact.levelAtTime] || ''})
+                      </span>
+                      <div style={{ marginTop: 2, color: impact.hpDelta < 0 ? '#27ae60' : '#c0392b' }}>
+                        {impact.hpDelta < 0
+                          ? `${Math.abs(impact.hpDelta)} damage dealt`
+                          : `${impact.hpDelta} HP recovered`}
+                        {impact.levelChanged && (
+                          <span style={{ marginLeft: 8, color: impact.hpDelta < 0 ? '#27ae60' : '#c0392b', fontWeight: 600 }}>
+                            → Lv.{impact.newLevel} ({ANTAGONIST_LEVEL_LABELS[impact.newLevel] || ''})
+                          </span>
+                        )}
+                        {impact.defeated && <span style={{ marginLeft: 8, fontWeight: 700, color: '#27ae60' }}>Defeated!</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {isExpanded && (
                 <div className="event-details">
