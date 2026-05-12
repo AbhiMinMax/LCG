@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { dbHelpers, db } from '../database/db';
+import { dbHelpers, db, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL_LABELS } from '../database/db';
 import { PATHS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
 import { TRAITS, computeUnlockedTraitIds } from '../utils/traitUtils';
 import { consumePendingEvent, storeBossSnapshot, getPrevBossSnapshot } from '../utils/animationState';
@@ -804,6 +804,125 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldP
   );
 }
 
+// ─── Antagonist card ──────────────────────────────────────────────────────────
+const ANT_RED = '#8b2020';
+const ANT_RED_DIM = 'rgba(139,32,32,0.15)';
+
+function AntagonistCard({ antagonist, taggedTitles = [], lastHitDaysAgo, recentChange, barReady }) {
+  const maxHP = ANTAGONIST_HP_POOLS[antagonist.currentLevel] || 1;
+  const hpPct = Math.min(100, Math.max(0, (antagonist.currentHP / maxHP) * 100));
+  const label = ANTAGONIST_LEVEL_LABELS[antagonist.currentLevel] || '';
+  const createdDays = Math.floor((Date.now() - new Date(antagonist.createdAt).getTime()) / 86400000);
+  const levelsCleared = antagonist.startingLevel - antagonist.currentLevel;
+
+  const [expanded, setExpanded] = useState(false);
+  const [fading, setFading] = useState(false);
+
+  // Level crossfade
+  const prevLabel = recentChange?.levelChanged ? ANTAGONIST_LEVEL_LABELS[recentChange.oldLevel] : null;
+  const [displayLabel, setDisplayLabel] = useState(prevLabel || label);
+  const [labelAnimClass, setLabelAnimClass] = useState(prevLabel ? 'label-fade-out' : '');
+
+  useEffect(() => {
+    if (prevLabel) {
+      const t1 = setTimeout(() => { setDisplayLabel(label); setLabelAnimClass('label-fade-in'); }, 330);
+      const t2 = setTimeout(() => setLabelAnimClass(''), 800);
+      if (recentChange?.levelChanged && navigator.vibrate) navigator.vibrate(60);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, []); // intentionally runs only on mount
+
+  useEffect(() => {
+    if (recentChange?.defeated) {
+      const t = setTimeout(() => setFading(true), 100);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
+  return (
+    <div
+      style={{
+        background: GM.bgCard,
+        border: `1px solid ${ANT_RED}33`,
+        borderLeft: `3px solid ${ANT_RED}`,
+        borderRadius: 8,
+        padding: '13px 15px',
+        marginBottom: 8,
+        opacity: fading ? 0 : 1,
+        transition: fading ? 'opacity 1.5s ease' : undefined,
+      }}
+    >
+      {/* Clickable header */}
+      <div onClick={() => setExpanded(e => !e)} style={{ cursor: 'pointer' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: GM.text }}>
+              ⚔ {antagonist.name}
+            </div>
+            <div style={{ marginTop: 3, fontSize: '0.75rem', color: ANT_RED, fontWeight: 600 }}>
+              <span className={labelAnimClass}>{displayLabel}</span>
+              <span style={{ color: GM.textDim, fontWeight: 400, marginLeft: 6 }}>Lv.{antagonist.currentLevel}</span>
+            </div>
+          </div>
+          <span style={{ color: GM.textDim, fontSize: '0.72rem', marginLeft: 8 }}>
+            {expanded ? '▲' : '▶'}
+          </span>
+        </div>
+
+        {/* HP bar */}
+        <div style={{ marginTop: 10 }}>
+          <div style={{ height: 8, background: 'rgba(139,32,32,0.15)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: barReady ? `${hpPct}%` : '0%',
+              background: ANT_RED,
+              borderRadius: 4,
+              transition: barReady ? 'width 0.6s ease' : 'none',
+            }} />
+          </div>
+          <div style={{ marginTop: 4, fontSize: '0.7rem', color: GM.textDim, display: 'flex', justifyContent: 'space-between' }}>
+            <span>{antagonist.currentHP} / {maxHP} HP</span>
+            <span>{Math.round(hpPct)}%</span>
+          </div>
+        </div>
+
+        {/* Collapsed stats row */}
+        <div style={{ marginTop: 8, display: 'flex', gap: 14, fontSize: '0.72rem', color: GM.textDim, flexWrap: 'wrap' }}>
+          <span>{antagonist.totalDamageDealt} total damage dealt</span>
+          <span>Fighting {createdDays}d</span>
+          {lastHitDaysAgo !== null && (
+            <span>Last hit: {lastHitDaysAgo === 0 ? 'today' : `${lastHitDaysAgo}d ago`}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded */}
+      {expanded && (
+        <div style={{ marginTop: 14, borderTop: `1px solid ${GM.border}`, paddingTop: 14, fontSize: '0.8rem', color: GM.textDim }}>
+          {antagonist.description && (
+            <p style={{ margin: '0 0 10px 0', fontStyle: 'italic' }}>{antagonist.description}</p>
+          )}
+          {taggedTitles.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontWeight: 600, color: GM.text, marginBottom: 4 }}>Tagged situations:</div>
+              {taggedTitles.map(t => (
+                <div key={t} style={{ paddingLeft: 8, marginBottom: 2 }}>· {t}</div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 8, fontSize: '0.72rem' }}>
+            <span>Started: {new Date(antagonist.createdAt).toLocaleDateString()}</span>
+            <span>Starting level: {antagonist.startingLevel} ({ANTAGONIST_LEVEL_LABELS[antagonist.startingLevel]})</span>
+            {levelsCleared > 0 && (
+              <span style={{ color: '#27ae60' }}>Levels cleared: {levelsCleared}</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Game mode progress page ──────────────────────────────────────────────────
 function GameProgress() {
   const [stats, setStats]                       = useState(null);
@@ -817,6 +936,12 @@ function GameProgress() {
   const [dissolvingBosses, setDissolvingBosses] = useState([]);
   const [expandedOpp, setExpandedOpp]           = useState(null);
   const [headerExpanded, setHeaderExpanded]     = useState(false);
+
+  // Antagonist state
+  const [antagonists, setAntagonists]               = useState([]);
+  const [antagonistChanges, setAntagonistChanges]   = useState(null); // { [antagonistId]: impact }
+  const [antagonistSituations, setAntagonistSituations] = useState({}); // { sitId → title }
+  const [antagonistLastHits, setAntagonistLastHits] = useState({}); // { antagonistId → daysAgo }
 
   useEffect(() => {
     (async () => {
@@ -863,12 +988,46 @@ function GameProgress() {
         storeBossSnapshot(gameStats.bosses);
 
         // Consume pending event animation state (from AddEvent)
-        const { affectedOppIds, levelChanges: lc } = consumePendingEvent();
+        const { affectedOppIds, levelChanges: lc, antagonistChanges: ac } = consumePendingEvent();
         if (affectedOppIds && affectedOppIds.length > 0) {
           setPulsingOpps(new Set(affectedOppIds));
         }
         if (lc && lc.length > 0) {
           setLevelChanges(Object.fromEntries(lc.map(c => [c.oppId, { prevLabel: c.prevLabel }])));
+        }
+
+        // Load antagonists and compute last-hit times
+        const [activeAnts, allEventsForAnts, allSitsForAnts] = await Promise.all([
+          dbHelpers.getAntagonists(),
+          db.events.toArray(),
+          db.situations.toArray(),
+        ]);
+        setAntagonists(activeAnts);
+
+        // Build sitId → title map
+        const sitTitleMap = Object.fromEntries(allSitsForAnts.map(s => [s.id, s.title]));
+        setAntagonistSituations(sitTitleMap);
+
+        // Compute last-hit for each antagonist: days since last positive game XP event on any tagged situation
+        const lastHits = {};
+        const now2 = Date.now();
+        for (const ant of activeAnts) {
+          const taggedIds = new Set(ant.taggedSituationIds || []);
+          const positiveHits = allEventsForAnts.filter(
+            ev => taggedIds.has(ev.situation_id) && (ev.game_xp_change || 0) > 0
+          );
+          if (positiveHits.length > 0) {
+            const latest = Math.max(...positiveHits.map(ev => new Date(ev.timestamp).getTime()));
+            lastHits[ant.id] = Math.floor((now2 - latest) / 86400000);
+          } else {
+            lastHits[ant.id] = null;
+          }
+        }
+        setAntagonistLastHits(lastHits);
+
+        // Store antagonist pending changes indexed by antagonistId
+        if (ac && ac.length > 0) {
+          setAntagonistChanges(Object.fromEntries(ac.map(c => [c.antagonistId, c])));
         }
       } catch (error) {
         console.error('[GameProgress] loadData error:', error);
@@ -933,7 +1092,31 @@ function GameProgress() {
         )}
       </div>
 
-      {/* Section 3 — The Frontier */}
+      {/* Section 3 — Declared Antagonists */}
+      {antagonists.length > 0 && (
+        <div style={{ marginTop: 28, borderTop: `1px solid ${GM.border}`, paddingTop: 20 }}>
+          <div style={{ fontSize: '0.72rem', color: GM.textDim, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+            Declared Antagonists
+          </div>
+          {antagonists.map(ant => {
+            const taggedTitles = (ant.taggedSituationIds || [])
+              .map(id => antagonistSituations[id])
+              .filter(Boolean);
+            return (
+              <AntagonistCard
+                key={ant.id}
+                antagonist={ant}
+                taggedTitles={taggedTitles}
+                lastHitDaysAgo={antagonistLastHits[ant.id] ?? null}
+                recentChange={antagonistChanges ? antagonistChanges[ant.id] : null}
+                barReady={barsReady}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Section 4 — The Frontier */}
       {(bosses.length > 0 || dissolvingBosses.length > 0 || (randomChallenge && randomChallenge.type !== 'edge')) && (
         <div style={{
           marginTop: 28,
