@@ -122,11 +122,33 @@ export class LifeProgressDB extends Dexie {
         if (opp.archived === undefined) opp.archived = false;
       });
     });
+
+    // Version 8: Add antagonists table
+    this.version(8).stores({
+      situations: '++id, title, description, tags, isMeta, challenging_level, created_at, updated_at',
+      opportunities: '++id, title, description, tags, current_xp, game_xp, path, path_locked, archived, current_level, created_at, updated_at',
+      situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
+      events: '++id, title, situation_id, event_description, choice_value, xp_change, game_xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
+      config: '++id, key, value',
+      antagonists: '++id, name, status, createdAt'
+    });
   }
 }
 
 // Create database instance
 export const db = new LifeProgressDB();
+
+// Antagonist system constants
+export const ANTAGONIST_HP_POOLS = {
+  10: 200, 9: 250, 8: 300, 7: 350, 6: 400,
+  5: 450,  4: 500, 3: 550, 2: 600, 1: 650,
+};
+
+export const ANTAGONIST_LEVEL_LABELS = {
+  10: 'Dominant', 9: 'Consuming', 8: 'Pervasive', 7: 'Persistent',
+  6: 'Present',   5: 'Recurring', 4: 'Occasional', 3: 'Weakening',
+  2: 'Residual',  1: 'Shadow',
+};
 
 // Database helper functions
 export const dbHelpers = {
@@ -934,12 +956,39 @@ export const dbHelpers = {
       }
     }
 
+    // Apply damage/recovery to active antagonists tagged to this situation
+    let antagonistImpacts = [];
+    if (isGameMode && gameXpChange !== null) {
+      const activeAntagonists = await this.getAntagonists();
+      const tagged = activeAntagonists.filter(
+        a => Array.isArray(a.taggedSituationIds) && a.taggedSituationIds.includes(situationId)
+      );
+      for (const antagonist of tagged) {
+        const result = await this.applyAntagonistDamage(antagonist.id, gameXpChange);
+        if (result) {
+          antagonistImpacts.push({
+            antagonistId: antagonist.id,
+            antagonistName: antagonist.name,
+            hpDelta: -gameXpChange, // positive XP = negative HP change
+            levelAtTime: result.oldLevel,
+            newLevel: result.newLevel,
+            levelChanged: result.levelChanged,
+            defeated: result.defeated,
+          });
+        }
+      }
+      if (antagonistImpacts.length > 0) {
+        await db.events.update(eventId, { antagonistImpacts });
+      }
+    }
+
     return {
       eventId,
       xpChange,
       gameXpChange,
       challengingLevel,
-      updatedOpportunities
+      updatedOpportunities,
+      antagonistImpacts,
     };
   },
 
@@ -1391,6 +1440,131 @@ export const dbHelpers = {
     } catch (error) {
       console.error('Error importing data:', error);
       throw error;
+    }
+  },
+
+  // ─── Antagonist helpers ────────────────────────────────────────────────────
+
+  // Returns all active (non-defeated) antagonists.
+  async getAntagonists() {
+    try {
+      return db.antagonists.where('status').equals('active').toArray();
+    } catch (error) {
+      console.error('[getAntagonists] error:', error);
+      return [];
+    }
+  },
+
+  // Returns all antagonists including defeated ones.
+  async getAllAntagonists() {
+    try {
+      return db.antagonists.toArray();
+    } catch (error) {
+      console.error('[getAllAntagonists] error:', error);
+      return [];
+    }
+  },
+
+  async createAntagonist(name, description, startingLevel, taggedSituationIds) {
+    try {
+      const level = Math.max(1, Math.min(10, parseInt(startingLevel) || 5));
+      const antagonist = {
+        name: name.trim(),
+        description: (description || '').trim(),
+        startingLevel: level,
+        currentLevel: level,
+        currentHP: ANTAGONIST_HP_POOLS[level],
+        taggedSituationIds: Array.isArray(taggedSituationIds) ? taggedSituationIds : [],
+        status: 'active',
+        totalDamageDealt: 0,
+        createdAt: new Date(),
+        defeatedAt: null,
+      };
+      const id = await db.antagonists.add(antagonist);
+      console.log(`[createAntagonist] created "${name}" at level ${level}`);
+      return { ...antagonist, id };
+    } catch (error) {
+      console.error('[createAntagonist] error:', error);
+      throw error;
+    }
+  },
+
+  async updateAntagonist(id, changes) {
+    try {
+      await db.antagonists.update(id, changes);
+      return db.antagonists.get(id);
+    } catch (error) {
+      console.error('[updateAntagonist] error:', error);
+      throw error;
+    }
+  },
+
+  async deleteAntagonist(id) {
+    try {
+      await db.antagonists.delete(id);
+    } catch (error) {
+      console.error('[deleteAntagonist] error:', error);
+      throw error;
+    }
+  },
+
+  // Applies a game XP change as damage/recovery to an antagonist.
+  // Positive gameXpChange = damage (HP decreases).
+  // Negative gameXpChange = recovery (HP increases).
+  // Returns { levelChanged, defeated, oldLevel, newLevel, newHP } or null if antagonist not found/already defeated.
+  async applyAntagonistDamage(antagonistId, gameXpChange) {
+    try {
+      const antagonist = await db.antagonists.get(antagonistId);
+      if (!antagonist || antagonist.status === 'defeated') return null;
+
+      let { currentLevel, currentHP, totalDamageDealt } = antagonist;
+      const oldLevel = currentLevel;
+      let levelChanged = false;
+      let defeated = false;
+
+      if (gameXpChange > 0) {
+        totalDamageDealt += gameXpChange;
+        currentHP -= gameXpChange;
+
+        // Handle level-down cascade (clearing multiple levels in one hit)
+        while (currentHP <= 0) {
+          if (currentLevel === 1) {
+            defeated = true;
+            currentHP = 0;
+            break;
+          }
+          const overflow = Math.abs(currentHP);
+          currentLevel--;
+          levelChanged = true;
+          currentHP = ANTAGONIST_HP_POOLS[currentLevel] - overflow;
+          if (currentHP < 0) currentHP = 0;
+        }
+      } else if (gameXpChange < 0) {
+        currentHP += Math.abs(gameXpChange);
+        const levelUpThreshold = ANTAGONIST_HP_POOLS[currentLevel] * 1.5;
+
+        if (currentHP >= levelUpThreshold && currentLevel < 10) {
+          const overflow = currentHP - levelUpThreshold;
+          currentLevel++;
+          levelChanged = true;
+          currentHP = Math.max(0, ANTAGONIST_HP_POOLS[currentLevel] - overflow);
+        }
+      }
+
+      const updates = { currentLevel, currentHP, totalDamageDealt };
+      if (defeated) {
+        updates.status = 'defeated';
+        updates.defeatedAt = new Date();
+      }
+
+      await db.antagonists.update(antagonistId, updates);
+      console.log(
+        `[applyAntagonistDamage] id=${antagonistId} xp=${gameXpChange} hp=${currentHP} lv=${currentLevel} defeated=${defeated}`
+      );
+      return { levelChanged, defeated, oldLevel, newLevel: currentLevel, newHP: currentHP };
+    } catch (error) {
+      console.error('[applyAntagonistDamage] error:', error);
+      return null;
     }
   },
 

@@ -2,21 +2,29 @@
 // Persists within the browser tab; cleared after consumption.
 
 const state = {
-  affectedOppIds: null,   // number[] — opp IDs from the last logged event
-  levelChanges: null,     // { oppId: { prevLabel } }[] — level label changes from last event
+  affectedOppIds: null,      // number[] — opp IDs from the last logged event
+  levelChanges: null,        // { oppId: { prevLabel } }[] — level label changes from last event
+  antagonistChanges: null,   // AntagonistImpact[] — antagonist state changes from last event
 };
 
 // Called in AddEvent after a successful event submission (game mode only).
-export function setPendingEvent(affectedOppIds, levelChanges) {
+// antagonistChanges: array of { antagonistId, hpDelta, oldLevel, newLevel, levelChanged, defeated }
+export function setPendingEvent(affectedOppIds, levelChanges, antagonistChanges = null) {
   state.affectedOppIds = affectedOppIds;
   state.levelChanges = levelChanges;
+  state.antagonistChanges = antagonistChanges;
 }
 
 // Called in CheckProgress on mount. Consumes and clears the pending data.
 export function consumePendingEvent() {
-  const result = { affectedOppIds: state.affectedOppIds, levelChanges: state.levelChanges };
+  const result = {
+    affectedOppIds: state.affectedOppIds,
+    levelChanges: state.levelChanges,
+    antagonistChanges: state.antagonistChanges,
+  };
   state.affectedOppIds = null;
   state.levelChanges = null;
+  state.antagonistChanges = null;
   return result;
 }
 
