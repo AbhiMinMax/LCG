@@ -60,6 +60,8 @@ Both `calculateXpChange` (standard) and `calculateGameXpChange` (game) are corre
 
 No bugs in the core calculation functions.
 
+**Note:** `CHOICE_OPTIONS[1].xp` was `-3` but `calculateXpChange` base for choice 1 was `-5`. Fixed in follow-up commit — CHOICE_OPTIONS updated to `-5`.
+
 ---
 
 ## Fixes Applied

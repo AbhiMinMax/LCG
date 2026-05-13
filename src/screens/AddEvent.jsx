@@ -5,7 +5,7 @@ import { getPathLevel, getRebirthInfo, PATHS, getRebirthSymbols, getNewRebirthSy
 import { setPendingEvent } from '../utils/animationState';
 
 const CHOICE_OPTIONS = [
-  { value: 1, label: 'Misguided Action', xp: -3, color: '#dc3545' },
+  { value: 1, label: 'Misguided Action', xp: -5, color: '#dc3545' },
   { value: 2, label: 'Didnt Try', xp: -2, color: '#fd7e14' },
   { value: 3, label: 'Tried', xp: 2, color: '#28a745' },
   { value: 4, label: 'Well Done!', xp: 5, color: '#007bff' }
