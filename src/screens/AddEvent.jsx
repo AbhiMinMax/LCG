@@ -226,7 +226,7 @@ function AddEvent() {
       // Difficulty multiplier only when Dynamic XP is also enabled
       if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
         const multiplier = 2 ** (currentSituation.challenging_level - 3);
-        base = Math.round(base * multiplier);
+        base = base * multiplier;
       }
       const isReal = currentSituation && !currentSituation.isMeta;
       if (base > 0 && isReal) base *= 2;
@@ -236,7 +236,7 @@ function AddEvent() {
     let xp = choice.xp;
     if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
       const multiplier = 2 ** (currentSituation.challenging_level - 3);
-      xp = Math.round(xp * multiplier);
+      xp = xp * multiplier;
     }
     return xp;
   }, [selectedChoice, gameModeEnabled, dynamicXpEnabled, currentSituation]);
@@ -404,7 +404,7 @@ function AddEvent() {
                   // Difficulty multiplier only when Dynamic XP is also enabled
                   if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
                     const multiplier = 2 ** (currentSituation.challenging_level - 3);
-                    base = Math.round(base * multiplier);
+                    base = base * multiplier;
                   }
                   if (base > 0 && isReal) base *= 2;
                   displayXp = base;
@@ -414,7 +414,7 @@ function AddEvent() {
                   displayXp = choice.xp;
                   if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
                     const multiplier = 2 ** (currentSituation.challenging_level - 3);
-                    displayXp = Math.round(choice.xp * multiplier);
+                    displayXp = choice.xp * multiplier;
                   }
                 }
                 const isDoubled = gameModeEnabled && isReal && GAME_BASE_XP[choice.value] > 0;
@@ -463,7 +463,7 @@ function AddEvent() {
                   if (selectedChoice) {
                     let base = GAME_BASE_XP[parseInt(selectedChoice)] ?? 0;
                     if (dynamicXpEnabled && currentSituation?.challenging_level) {
-                      base = Math.round(base * 2 ** (currentSituation.challenging_level - 3));
+                      base = base * 2 ** (currentSituation.challenging_level - 3);
                     }
                     if (base > 0 && !currentSituation?.isMeta) base *= 2;
                     previewXp = base;
