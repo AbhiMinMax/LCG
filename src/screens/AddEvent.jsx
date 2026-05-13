@@ -12,7 +12,7 @@ const CHOICE_OPTIONS = [
 ];
 
 // Game mode base XP (before real/meta doubling)
-const GAME_BASE_XP = { 1: -2, 2: -1, 3: 1, 4: 2 };
+const GAME_BASE_XP = { 1: -10, 2: -5, 3: 5, 4: 10 };
 
 function AddEvent() {
   const [situations, setSituations] = useState([]);
