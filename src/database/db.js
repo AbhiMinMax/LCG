@@ -641,15 +641,15 @@ export const dbHelpers = {
   // Negative XP (didnt_try, misguided) is never doubled regardless of flags.
   calculateGameXpChange(choiceValue, isMeta = false, challengingLevel = 3, isDynamicXp = false) {
     const baseXpMap = {
-      1: -10,  // Misguided Action
-      2: -5,   // Didnt Try
-      3: 5,    // Tried
-      4: 10,   // Well Done!
+      1: -4,  // Misguided Action
+      2: -2,  // Didnt Try
+      3: 2,   // Tried
+      4: 4,   // Well Done!
     };
     let xp = baseXpMap[choiceValue] ?? 0;
     // Apply difficulty multiplier only when Dynamic XP is also enabled
     if (isDynamicXp && challengingLevel) {
-      const multiplier = (challengingLevel + 1) / 4;
+      const multiplier = 2 ** (challengingLevel - 3);
       xp = Math.round(xp * multiplier);
     }
     if (xp > 0 && !isMeta) xp *= 2;
@@ -659,16 +659,16 @@ export const dbHelpers = {
   // XP and Level calculation
   calculateXpChange(choiceValue, challengingLevel = 3, isDynamicXp = false) {
     const baseXpMap = {
-      1: -10, // Misguided Action
-      2: -5,  // Didnt Try
-      3: 5,   // Tried
-      4: 10   // Well Done!
+      1: -4, // Misguided Action
+      2: -2, // Didnt Try
+      3: 2,  // Tried
+      4: 4   // Well Done!
     };
 
     let xp = baseXpMap[choiceValue] || 0;
 
     if (isDynamicXp && challengingLevel) {
-      const multiplier = (challengingLevel + 1) / 4; // Level 1=0.5x, 3=1x, 5=1.5x
+      const multiplier = 2 ** (challengingLevel - 3); // Level 1=0.25x, 3=1x, 5=4x
       xp = Math.round(xp * multiplier);
     }
     

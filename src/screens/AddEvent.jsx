@@ -12,7 +12,7 @@ const CHOICE_OPTIONS = [
 ];
 
 // Game mode base XP (before real/meta doubling)
-const GAME_BASE_XP = { 1: -10, 2: -5, 3: 5, 4: 10 };
+const GAME_BASE_XP = { 1: -4, 2: -2, 3: 2, 4: 4 };
 
 function AddEvent() {
   const [situations, setSituations] = useState([]);
@@ -225,7 +225,7 @@ function AddEvent() {
       let base = GAME_BASE_XP[choice.value] ?? 0;
       // Difficulty multiplier only when Dynamic XP is also enabled
       if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-        const multiplier = (currentSituation.challenging_level + 1) / 4;
+        const multiplier = 2 ** (currentSituation.challenging_level - 3);
         base = Math.round(base * multiplier);
       }
       const isReal = currentSituation && !currentSituation.isMeta;
@@ -235,7 +235,7 @@ function AddEvent() {
 
     let xp = choice.xp;
     if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-      const multiplier = (currentSituation.challenging_level + 1) / 4;
+      const multiplier = 2 ** (currentSituation.challenging_level - 3);
       xp = Math.round(xp * multiplier);
     }
     return xp;
@@ -269,7 +269,7 @@ function AddEvent() {
               : `${lastResult.xpChange > 0 ? '+' : ''}${lastResult.xpChange} XP`}
             {lastResult.challengingLevel && lastResult.challengingLevel !== 3 && (
               <span style={{fontSize: '0.9em', marginLeft: '8px', color: '#666'}}>
-                (difficulty ×{((lastResult.challengingLevel + 1) / 4).toFixed(1)})
+                (difficulty ×{(2 ** (lastResult.challengingLevel - 3)).toFixed(1)})
               </span>
             )}
           </p>
@@ -298,7 +298,7 @@ function AddEvent() {
             <strong style={{color: '#495057'}}>Dynamic XP Active</strong>
           </div>
           <p style={{margin: '0', fontSize: '0.9em', color: '#6c757d'}}>
-            XP rewards are being multiplied by {((currentSituation.challenging_level + 1) / 4).toFixed(1)}x due to this situation's challenging level ({currentSituation.challenging_level}/5).
+            XP rewards are being multiplied by {(2 ** (currentSituation.challenging_level - 3)).toFixed(1)}x due to this situation's challenging level ({currentSituation.challenging_level}/5).
           </p>
         </div>
       )}
@@ -403,7 +403,7 @@ function AddEvent() {
                   let base = GAME_BASE_XP[choice.value] ?? 0;
                   // Difficulty multiplier only when Dynamic XP is also enabled
                   if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-                    const multiplier = (currentSituation.challenging_level + 1) / 4;
+                    const multiplier = 2 ** (currentSituation.challenging_level - 3);
                     base = Math.round(base * multiplier);
                   }
                   if (base > 0 && isReal) base *= 2;
@@ -413,7 +413,7 @@ function AddEvent() {
                 } else {
                   displayXp = choice.xp;
                   if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-                    const multiplier = (currentSituation.challenging_level + 1) / 4;
+                    const multiplier = 2 ** (currentSituation.challenging_level - 3);
                     displayXp = Math.round(choice.xp * multiplier);
                   }
                 }
@@ -440,7 +440,7 @@ function AddEvent() {
                         )}
                         {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
                           <span style={{ fontSize: '0.8em', marginLeft: '4px', opacity: 0.7 }}>
-                            (×{((currentSituation.challenging_level + 1) / 4).toFixed(1)})
+                            (×{(2 ** (currentSituation.challenging_level - 3)).toFixed(1)})
                           </span>
                         )}
                       </div>
@@ -463,7 +463,7 @@ function AddEvent() {
                   if (selectedChoice) {
                     let base = GAME_BASE_XP[parseInt(selectedChoice)] ?? 0;
                     if (dynamicXpEnabled && currentSituation?.challenging_level) {
-                      base = Math.round(base * (currentSituation.challenging_level + 1) / 4);
+                      base = Math.round(base * 2 ** (currentSituation.challenging_level - 3));
                     }
                     if (base > 0 && !currentSituation?.isMeta) base *= 2;
                     previewXp = base;
@@ -602,7 +602,7 @@ function AddEvent() {
               <strong>{Math.abs(getChoiceXp())} {gameModeEnabled ? 'game ' : ''}XP</strong> to each:
               {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
                 <span style={{ fontSize: '0.9em', color: 'var(--text-secondary)', marginLeft: '8px' }}>
-                  (difficulty ×{((currentSituation.challenging_level + 1) / 4).toFixed(1)} applied)
+                  (difficulty ×{(2 ** (currentSituation.challenging_level - 3)).toFixed(1)} applied)
                 </span>
               )}
             </p>
