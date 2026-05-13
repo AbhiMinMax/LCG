@@ -263,10 +263,13 @@ function AddEvent() {
         <div className="card success-card">
           <h3>✅ Event Added Successfully!</h3>
           <p>
-            <strong>XP Change:</strong> {lastResult.xpChange > 0 ? '+' : ''}{lastResult.xpChange}
+            <strong>XP Change:</strong>{' '}
+            {gameModeEnabled
+              ? `${(lastResult.gameXpChange ?? 0) > 0 ? '+' : ''}${lastResult.gameXpChange ?? 0} game XP`
+              : `${lastResult.xpChange > 0 ? '+' : ''}${lastResult.xpChange} XP`}
             {lastResult.challengingLevel && lastResult.challengingLevel !== 3 && (
               <span style={{fontSize: '0.9em', marginLeft: '8px', color: '#666'}}>
-                (Challenging Level: {lastResult.challengingLevel}/5)
+                (difficulty ×{Math.max(1.0, lastResult.challengingLevel / 3).toFixed(1)})
               </span>
             )}
           </p>
@@ -276,6 +279,11 @@ function AddEvent() {
               {lastResult.updatedOpportunities.map(opp => (
                 <li key={opp.id}>
                   {opp.title}: Level {opp.current_level} ({opp.current_xp}/100 XP)
+                  {gameModeEnabled && opp.game_xp != null && (
+                    <span style={{fontSize: '0.85em', color: 'var(--text-secondary)', marginLeft: '6px'}}>
+                      | Game XP: {opp.game_xp}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -430,7 +438,7 @@ function AddEvent() {
                         {isDoubled && (
                           <span style={{ fontSize: '0.8em', marginLeft: '4px' }} title="Real situation — positive XP doubled">⚡</span>
                         )}
-                        {!gameModeEnabled && dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
+                        {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
                           <span style={{ fontSize: '0.8em', marginLeft: '4px', opacity: 0.7 }}>
                             (×{Math.max(1.0, currentSituation.challenging_level / 3).toFixed(1)})
                           </span>
@@ -624,7 +632,7 @@ function AddEvent() {
                     </li>
                   );
                 }
-                {(() => {
+                return (() => {
                   let previewXp = Math.max(0, opp.current_xp + getChoiceXp());
                   let previewLevel = opp.current_level;
                   while (previewXp >= 100) { previewLevel++; previewXp -= 100; }
@@ -642,7 +650,7 @@ function AddEvent() {
                       </div>
                     </li>
                   );
-                })()}
+                })();
               })}
             </ul>
           </div>
