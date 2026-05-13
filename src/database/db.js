@@ -649,7 +649,7 @@ export const dbHelpers = {
     let xp = baseXpMap[choiceValue] ?? 0;
     // Apply difficulty multiplier only when Dynamic XP is also enabled
     if (isDynamicXp && challengingLevel) {
-      const multiplier = Math.max(1.0, challengingLevel / 3);
+      const multiplier = challengingLevel / 3;
       xp = Math.round(xp * multiplier);
     }
     if (xp > 0 && !isMeta) xp *= 2;
@@ -669,7 +669,7 @@ export const dbHelpers = {
     
     if (isDynamicXp && challengingLevel) {
       // Apply challenging level multiplier (1-5 scale), minimum 1.0x
-      const multiplier = Math.max(1.0, challengingLevel / 3); // Base level 3 = 1x, minimum 1x
+      const multiplier = challengingLevel / 3; // Level 3 = 1x
       xp = Math.round(xp * multiplier);
     }
     
