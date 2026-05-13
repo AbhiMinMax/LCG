@@ -269,7 +269,7 @@ function AddEvent() {
               : `${lastResult.xpChange > 0 ? '+' : ''}${lastResult.xpChange} XP`}
             {lastResult.challengingLevel && lastResult.challengingLevel !== 3 && (
               <span style={{fontSize: '0.9em', marginLeft: '8px', color: '#666'}}>
-                (difficulty ×{(2 ** (lastResult.challengingLevel - 3)).toFixed(1)})
+                (difficulty ×{2 ** (lastResult.challengingLevel - 3)})
               </span>
             )}
           </p>
@@ -298,7 +298,7 @@ function AddEvent() {
             <strong style={{color: '#495057'}}>Dynamic XP Active</strong>
           </div>
           <p style={{margin: '0', fontSize: '0.9em', color: '#6c757d'}}>
-            XP rewards are being multiplied by {(2 ** (currentSituation.challenging_level - 3)).toFixed(1)}x due to this situation's challenging level ({currentSituation.challenging_level}/5).
+            XP rewards are being multiplied by {2 ** (currentSituation.challenging_level - 3)}x due to this situation's challenging level ({currentSituation.challenging_level}/5).
           </p>
         </div>
       )}
@@ -440,7 +440,7 @@ function AddEvent() {
                         )}
                         {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
                           <span style={{ fontSize: '0.8em', marginLeft: '4px', opacity: 0.7 }}>
-                            (×{(2 ** (currentSituation.challenging_level - 3)).toFixed(1)})
+                            (×{2 ** (currentSituation.challenging_level - 3)})
                           </span>
                         )}
                       </div>
@@ -602,7 +602,7 @@ function AddEvent() {
               <strong>{Math.abs(getChoiceXp())} {gameModeEnabled ? 'game ' : ''}XP</strong> to each:
               {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
                 <span style={{ fontSize: '0.9em', color: 'var(--text-secondary)', marginLeft: '8px' }}>
-                  (difficulty ×{(2 ** (currentSituation.challenging_level - 3)).toFixed(1)} applied)
+                  (difficulty ×{2 ** (currentSituation.challenging_level - 3)} applied)
                 </span>
               )}
             </p>
