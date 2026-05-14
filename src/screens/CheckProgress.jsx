@@ -160,20 +160,14 @@ function computeGameStats(opportunities, events, situations, cfg = {}) {
     oppStreaks[opp.id] = computeOppStreaks(opp.id, sorted);
   }
 
-  // Sort opportunities: most recently active first
-  const lastActive = {};
-  for (const ev of events) {
-    const t = new Date(ev.timestamp).getTime();
-    if (Array.isArray(ev.affected_opportunities)) {
-      for (const id of ev.affected_opportunities) {
-        if (!lastActive[id] || t > lastActive[id]) lastActive[id] = t;
-      }
-    }
-  }
-  const sortedOpps = [...opportunities].sort((a, b) =>
-    (lastActive[b.id] || new Date(b.created_at).getTime()) -
-    (lastActive[a.id] || new Date(a.created_at).getTime())
-  );
+  // Sort opportunities by level (via game_xp) desc, then game_xp desc as tiebreaker
+  const sortedOpps = [...opportunities].sort((a, b) => {
+    const aInfo = getPathLevel(a.game_xp || 0, a.path || 'default');
+    const bInfo = getPathLevel(b.game_xp || 0, b.path || 'default');
+    if (bInfo.rebirths !== aInfo.rebirths) return bInfo.rebirths - aInfo.rebirths;
+    if (bInfo.level !== aInfo.level) return bInfo.level - aInfo.level;
+    return (b.game_xp || 0) - (a.game_xp || 0);
+  });
 
   // Per-opportunity sparkline: game XP gain bucketed into 8 weekly slots (oldest → newest)
   const oppSparklines = {};
@@ -1001,7 +995,7 @@ function GameProgress() {
 function StandardProgress() {
   const [opportunities, setOpportunities] = useState([]);
   const [allOpportunities, setAllOpportunities] = useState([]);
-  const [sortBy, setSortBy] = useState('alphabetical');
+  const [sortBy, setSortBy] = useState('level');
   const [loading, setLoading] = useState(true);
   const [selectedOpportunity, setSelectedOpportunity] = useState(null);
   const [availableTags, setAvailableTags] = useState([]);

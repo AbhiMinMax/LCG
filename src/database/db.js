@@ -986,6 +986,8 @@ export const dbHelpers = {
       xpChange,
       gameXpChange,
       challengingLevel,
+      choiceValue,
+      isMeta,
       updatedOpportunities,
       antagonistImpacts,
     };

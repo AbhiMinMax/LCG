@@ -14,6 +14,8 @@ const CHOICE_OPTIONS = [
 // Game mode base XP (before real/meta doubling)
 const GAME_BASE_XP = { 1: -4, 2: -2, 3: 2, 4: 4 };
 
+const fmtXp = (v) => parseFloat((v || 0).toFixed(2));
+
 function AddEvent() {
   const [situations, setSituations] = useState([]);
   const [filteredSituations, setFilteredSituations] = useState([]);
@@ -264,14 +266,43 @@ function AddEvent() {
           <h3>✅ Event Added Successfully!</h3>
           <p>
             <strong>XP Change:</strong>{' '}
-            {gameModeEnabled
-              ? `${(lastResult.gameXpChange ?? 0) > 0 ? '+' : ''}${lastResult.gameXpChange ?? 0} game XP`
-              : `${lastResult.xpChange > 0 ? '+' : ''}${lastResult.xpChange} XP`}
-            {lastResult.challengingLevel && lastResult.challengingLevel !== 3 && (
-              <span style={{fontSize: '0.9em', marginLeft: '8px', color: '#666'}}>
-                (difficulty ×{2 ** (lastResult.challengingLevel - 3)})
-              </span>
-            )}
+            {(() => {
+              const cv = lastResult.choiceValue;
+              const cl = lastResult.challengingLevel;
+              const isRealSit = !lastResult.isMeta;
+              const showDyn = dynamicXpEnabled && cl !== 3;
+              if (gameModeEnabled) {
+                const baseXp = GAME_BASE_XP[cv] ?? 0;
+                const mul = dynamicXpEnabled ? 2 ** (cl - 3) : 1;
+                const total = fmtXp(lastResult.gameXpChange ?? 0);
+                const showReal = isRealSit && baseXp > 0;
+                return (
+                  <span>
+                    {total > 0 ? '+' : ''}{total} game XP
+                    {(showDyn || showReal) && (
+                      <span style={{fontSize: '0.85em', marginLeft: '6px', color: '#666'}}>
+                        {showDyn && `(${fmtXp(baseXp)} × ${fmtXp(mul)}x)`}
+                        {showReal && ` (×2 Real)`}
+                      </span>
+                    )}
+                  </span>
+                );
+              } else {
+                const baseXp = CHOICE_OPTIONS.find(o => o.value === cv)?.xp ?? 0;
+                const mul = dynamicXpEnabled ? 2 ** (cl - 3) : 1;
+                const total = fmtXp(lastResult.xpChange);
+                return (
+                  <span>
+                    {total > 0 ? '+' : ''}{total} XP
+                    {showDyn && (
+                      <span style={{fontSize: '0.85em', marginLeft: '6px', color: '#666'}}>
+                        ({fmtXp(baseXp)} × {fmtXp(mul)}x)
+                      </span>
+                    )}
+                  </span>
+                );
+              }
+            })()}
           </p>
           <div>
             <strong>Affected Opportunities:</strong>
@@ -298,7 +329,7 @@ function AddEvent() {
             <strong style={{color: '#495057'}}>Dynamic XP Active</strong>
           </div>
           <p style={{margin: '0', fontSize: '0.9em', color: '#6c757d'}}>
-            XP rewards are being multiplied by {2 ** (currentSituation.challenging_level - 3)}x due to this situation's challenging level ({currentSituation.challenging_level}/5).
+            XP rewards are being multiplied by {fmtXp(2 ** (currentSituation.challenging_level - 3))}x due to this situation's challenging level ({fmtXp(currentSituation.challenging_level)}/5).
           </p>
         </div>
       )}
@@ -397,27 +428,13 @@ function AddEvent() {
             <div className="choice-group">
               {CHOICE_OPTIONS.map(choice => {
                 const isReal = currentSituation && !currentSituation.isMeta;
-                // Compute display XP for this choice
-                let displayXp;
-                if (gameModeEnabled) {
-                  let base = GAME_BASE_XP[choice.value] ?? 0;
-                  // Difficulty multiplier only when Dynamic XP is also enabled
-                  if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-                    const multiplier = 2 ** (currentSituation.challenging_level - 3);
-                    base = base * multiplier;
-                  }
-                  if (base > 0 && isReal) base *= 2;
-                  displayXp = base;
-                } else if (selectedChoice === choice.value.toString()) {
-                  displayXp = currentXp;
-                } else {
-                  displayXp = choice.xp;
-                  if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-                    const multiplier = 2 ** (currentSituation.challenging_level - 3);
-                    displayXp = choice.xp * multiplier;
-                  }
-                }
-                const isDoubled = gameModeEnabled && isReal && GAME_BASE_XP[choice.value] > 0;
+                const rawBase = gameModeEnabled ? (GAME_BASE_XP[choice.value] ?? 0) : choice.xp;
+                const dynamicMul = (dynamicXpEnabled && currentSituation?.challenging_level)
+                  ? 2 ** (currentSituation.challenging_level - 3)
+                  : 1;
+                const showDynBreakdown = dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3;
+                const showRealDoubling = gameModeEnabled && isReal && rawBase > 0;
+                const displayXp = fmtXp(rawBase * dynamicMul * (showRealDoubling ? 2 : 1));
                 return (
                   <label
                     key={choice.value}
@@ -434,14 +451,16 @@ function AddEvent() {
                     <div className="choice-content">
                       <div className="choice-label">{choice.label}</div>
                       <div className="choice-xp" style={{ color: choice.color }}>
-                        {displayXp > 0 ? '+' : ''}{displayXp} XP
-                        {isDoubled && (
-                          <span style={{ fontSize: '0.8em', marginLeft: '4px' }} title="Real situation — positive XP doubled">⚡</span>
-                        )}
-                        {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
-                          <span style={{ fontSize: '0.8em', marginLeft: '4px', opacity: 0.7 }}>
-                            (×{2 ** (currentSituation.challenging_level - 3)})
-                          </span>
+                        <span>{displayXp > 0 ? '+' : ''}{displayXp} XP</span>
+                        {(showDynBreakdown || showRealDoubling) && (
+                          <div style={{ fontSize: '0.75em', lineHeight: 1.2, marginTop: '2px', opacity: 0.85 }}>
+                            {showDynBreakdown && (
+                              <span>({fmtXp(rawBase)} × {fmtXp(dynamicMul)}x)</span>
+                            )}
+                            {showRealDoubling && (
+                              <span style={{ marginLeft: showDynBreakdown ? '4px' : '0' }}>(×2 Real)</span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -567,7 +586,7 @@ function AddEvent() {
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                 <strong style={{ color }}>{event.title}</strong>
                                 <span style={{ color: (event.game_xp_change ?? event.xp_change) >= 0 ? '#28a745' : '#dc3545', fontWeight: 600 }}>
-                                  {(event.game_xp_change ?? event.xp_change) > 0 ? '+' : ''}{event.game_xp_change ?? event.xp_change} XP
+                                  {(event.game_xp_change ?? event.xp_change) > 0 ? '+' : ''}{fmtXp(event.game_xp_change ?? event.xp_change)} XP
                                 </span>
                               </div>
                               <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>{formatEventDate(event.timestamp)}</div>

@@ -3,6 +3,8 @@ import { dbHelpers, ANTAGONIST_LEVEL_LABELS } from '../database/db';
 import { ThoughtPassage } from '../components/ThoughtPassage';
 import './ProgressStyles.css';
 
+const fmtXp = (v) => parseFloat((v || 0).toFixed(2));
+
 const CHOICE_LABELS = {
   1: 'Misguided Action',
   2: 'Didnt Try', 
@@ -137,7 +139,7 @@ function CheckHistory() {
     const totalEvents = events.length;
     const totalXpGained = events.reduce((sum, event) => sum + Math.max(0, getDisplayXp(event)), 0);
     const totalXpLost = events.reduce((sum, event) => sum + Math.min(0, getDisplayXp(event)), 0);
-    const avgXpPerEvent = totalEvents > 0 ? (events.reduce((sum, event) => sum + getDisplayXp(event), 0) / totalEvents).toFixed(1) : 0;
+    const avgXpPerEvent = totalEvents > 0 ? (events.reduce((sum, event) => sum + getDisplayXp(event), 0) / totalEvents).toFixed(2) : 0;
 
     return { totalEvents, totalXpGained, totalXpLost, avgXpPerEvent };
   };
@@ -167,11 +169,11 @@ function CheckHistory() {
             <div className="stat-label">Total Events</div>
           </div>
           <div className="stat-item">
-            <div className="stat-value" style={{ color: '#28a745' }}>+{stats.totalXpGained}</div>
+            <div className="stat-value" style={{ color: '#28a745' }}>+{fmtXp(stats.totalXpGained)}</div>
             <div className="stat-label">XP Gained</div>
           </div>
           <div className="stat-item">
-            <div className="stat-value" style={{ color: '#dc3545' }}>{stats.totalXpLost}</div>
+            <div className="stat-value" style={{ color: '#dc3545' }}>{fmtXp(stats.totalXpLost)}</div>
             <div className="stat-label">XP Lost</div>
           </div>
         </div>
@@ -252,7 +254,7 @@ function CheckHistory() {
                     className="xp-change"
                     style={getXpChangeStyle(getDisplayXp(event))}
                   >
-                    {getDisplayXp(event) > 0 ? '+' : ''}{getDisplayXp(event)} XP
+                    {getDisplayXp(event) > 0 ? '+' : ''}{fmtXp(getDisplayXp(event))} XP
                   </span>
                   {gameModeEnabled && event.antagonistImpacts?.length > 0 && (
                     <button
@@ -361,7 +363,7 @@ function CheckHistory() {
                           className="detail-value"
                           style={getXpChangeStyle(getDisplayXp(event))}
                         >
-                          {getDisplayXp(event) > 0 ? '+' : ''}{getDisplayXp(event)}
+                          {getDisplayXp(event) > 0 ? '+' : ''}{fmtXp(getDisplayXp(event))}
                           {gameModeEnabled && event.game_xp_change == null && (
                             <span style={{ fontSize: '0.8em', color: '#999', marginLeft: '6px' }}>(pre-game mode)</span>
                           )}
