@@ -24,7 +24,18 @@
       "Bash(node:*)",
       "Bash(npx vite:*)",
       "Bash(node_modules\\\\.bin\\\\vite build:*)",
-      "Bash(./node_modules/.bin/vite build:*)"
+      "Bash(./node_modules/.bin/vite build:*)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Abhishek\\\\Desktop\\\\Projects\\\\claude\\\\LCG\")",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Abhishek\\\\Desktop\\\\Projects\\\\claude\\\\LCG\\\\src\" -Recurse -Depth 3 | Where-Object { $_.PSIsContainer -or $_.Extension -in @\\('.jsx', '.js', '.ts', '.tsx'\\) } | Select-Object FullName | ForEach-Object { $_.FullName -replace [regex]::Escape\\(\"C:\\\\Users\\\\Abhishek\\\\Desktop\\\\Projects\\\\claude\\\\LCG\\\\\"\\), \"\" })",
+      "Bash(Find-Content -Path \"C:\\\\Users\\\\Abhishek\\\\Desktop\\\\Projects\\\\claude\\\\LCG\\\\src\" -Filter \"*.jsx\" -ErrorAction SilentlyContinue)",
+      "Bash(Get-Item)",
+      "Bash(Select-Object Name)",
+      "Bash(grep -v \"//\\\\|===\\\\|!==\\\\|>=\\\\|<=\\\\|>\\\\|<\\\\|getPath\\\\|getRebi\\\\|\\\\\\\\.filter\\\\|\\\\\\\\.map\\\\|\\\\\\\\.find\\\\|\\\\\\\\.sort\\\\|\\\\\\\\.reduce\\\\|const \\\\|let \\\\|if \\\\|?\\\\|Math\\\\.\")",
+      "Bash(grep -v \"//\\\\|===\\\\|!==\\\\|>=\\\\|<=\\\\|>\\\\|<\\\\|getPath\\\\|getRebi\\\\|\\\\\\\\.filter\\\\|\\\\\\\\.map\\\\|\\\\\\\\.find\\\\|\\\\\\\\.sort\\\\|\\\\\\\\.reduce\\\\|const \\\\|let \\\\|if \\\\|?\\\\|Math\\\\.\\\\|game_xp\\\\b\\\\|game_xp_\")",
+      "Bash(findstr /n \"getDisplayXp\\\\|xp_change\\\\|game_xp_change\\\\|hpDelta\\\\|totalDamage\\\\|currentHP\" src\\\\screens\\\\CheckHistory.jsx)",
+      "Bash(npm cache *)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

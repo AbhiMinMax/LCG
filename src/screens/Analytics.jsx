@@ -232,7 +232,7 @@ function GameStatsSection({ rawEvents, rawOpps, rawSits, profile, antagonists = 
       {expanded.overall && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 0 4px' }}>
           <SectionRow label="Total events" value={data.totalEvents} />
-          <SectionRow label="Total game XP" value={data.totalGameXP.toLocaleString()} />
+          <SectionRow label="Total game XP" value={parseFloat(data.totalGameXP.toFixed(2)).toLocaleString()} />
           <SectionRow label="Login streak" value={`${data.loginStreak} day${data.loginStreak !== 1 ? 's' : ''}`} />
           <SectionRow label="Real / meta split" value={`${data.realPct}% real`} />
           <SectionRow label="Depth XP" value={data.depthXP.toLocaleString()} />
@@ -291,7 +291,7 @@ function GameStatsSection({ rawEvents, rawOpps, rawSits, profile, antagonists = 
                 <div key={ant.id} style={{ marginTop: 6, fontSize: '0.72rem', color: '#8b2020', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span>⚔ {ant.name}</span>
                   <span style={{ color: 'var(--text-secondary)' }}>Lv.{ant.currentLevel}</span>
-                  {damage > 0 && <span style={{ color: '#27ae60' }}>{damage} damage through this situation</span>}
+                  {damage > 0 && <span style={{ color: '#27ae60' }}>{parseFloat(damage.toFixed(2))} damage through this situation</span>}
                 </div>
               ))}
             </div>
