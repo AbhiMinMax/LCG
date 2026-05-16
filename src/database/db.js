@@ -876,7 +876,7 @@ export const dbHelpers = {
   async addEvent(situationId, eventDescription, choiceValue, eventTitle = null, selectedBackThought = null, selectedForthThought = null) {
     // Get situation details for challenging level and isMeta
     const situation = await db.situations.get(situationId);
-    const challengingLevel = situation ? situation.challenging_level : 3;
+    const challengingLevel = situation ? (Math.round(situation.challenging_level) || 3) : 3;
     const isMeta = situation ? (situation.isMeta === true) : false;
 
     // Check enabled features

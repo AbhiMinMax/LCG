@@ -264,7 +264,7 @@ function BossCard({ boss, dissolving }) {
         <span>
           {boss.type === 'situation'
             ? `Failure run: ${boss.failureRun}`
-            : `Net XP (last 20): ${boss.netXp}`}
+            : `Net XP (last 20): ${parseFloat(boss.netXp.toFixed(2))}`}
         </span>
         {boss.type === 'situation' && boss.lastSuccessDaysAgo !== null && (
           <span>

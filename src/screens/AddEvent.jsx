@@ -227,7 +227,7 @@ function AddEvent() {
       let base = GAME_BASE_XP[choice.value] ?? 0;
       // Difficulty multiplier only when Dynamic XP is also enabled
       if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-        const multiplier = 2 ** (currentSituation.challenging_level - 3);
+        const multiplier = 2 ** (Math.round(currentSituation.challenging_level) - 3);
         base = base * multiplier;
       }
       const isReal = currentSituation && !currentSituation.isMeta;
@@ -268,7 +268,7 @@ function AddEvent() {
             <strong>XP Change:</strong>{' '}
             {(() => {
               const cv = lastResult.choiceValue;
-              const cl = lastResult.challengingLevel;
+              const cl = Math.round(lastResult.challengingLevel) || 3;
               const isRealSit = !lastResult.isMeta;
               const showDyn = dynamicXpEnabled && cl !== 3;
               if (gameModeEnabled) {
@@ -329,7 +329,7 @@ function AddEvent() {
             <strong style={{color: '#495057'}}>Dynamic XP Active</strong>
           </div>
           <p style={{margin: '0', fontSize: '0.9em', color: '#6c757d'}}>
-            XP rewards are being multiplied by {fmtXp(2 ** (currentSituation.challenging_level - 3))}x due to this situation's challenging level ({fmtXp(currentSituation.challenging_level)}/5).
+            XP rewards are being multiplied by {fmtXp(2 ** (Math.round(currentSituation.challenging_level) - 3))}x due to this situation's challenging level ({Math.round(currentSituation.challenging_level)}/5).
           </p>
         </div>
       )}
@@ -429,10 +429,11 @@ function AddEvent() {
               {CHOICE_OPTIONS.map(choice => {
                 const isReal = currentSituation && !currentSituation.isMeta;
                 const rawBase = gameModeEnabled ? (GAME_BASE_XP[choice.value] ?? 0) : choice.xp;
+                const clevel = currentSituation ? Math.round(currentSituation.challenging_level) : 3;
                 const dynamicMul = (dynamicXpEnabled && currentSituation?.challenging_level)
-                  ? 2 ** (currentSituation.challenging_level - 3)
+                  ? 2 ** (clevel - 3)
                   : 1;
-                const showDynBreakdown = dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3;
+                const showDynBreakdown = dynamicXpEnabled && currentSituation && clevel !== 3;
                 const showRealDoubling = gameModeEnabled && isReal && rawBase > 0;
                 const displayXp = fmtXp(rawBase * dynamicMul * (showRealDoubling ? 2 : 1));
                 return (
