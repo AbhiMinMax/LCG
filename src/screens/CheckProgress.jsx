@@ -535,7 +535,7 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldP
           }} />
         </div>
         <div style={{ marginTop: 4, fontSize: '0.7rem', color: GM.textDim, display: 'flex', justifyContent: 'space-between' }}>
-          <span>{lvInfo.xpIntoLevel} / {lvInfo.xpForLevel} XP</span>
+          <span>{parseFloat(lvInfo.xpIntoLevel.toFixed(2))} / {parseFloat(lvInfo.xpForLevel.toFixed(2))} XP</span>
           {!lvInfo.isPrestige && lvInfo.nextLabel && (
             <span style={{ opacity: 0.7 }}>→ {lvInfo.nextLabel}</span>
           )}
@@ -578,12 +578,12 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldP
         }}>
           <div>
             <span style={{ color: GM.text, fontWeight: 500 }}>Total game XP </span>
-            {opp.game_xp || 0}
+            {parseFloat((opp.game_xp || 0).toFixed(2))}
           </div>
           {!lvInfo.isPrestige && (
             <div>
               <span style={{ color: GM.text, fontWeight: 500 }}>XP to {lvInfo.nextLabel} </span>
-              {lvInfo.xpToNext}
+              {parseFloat(lvInfo.xpToNext.toFixed(2))}
             </div>
           )}
 
@@ -1112,7 +1112,7 @@ function StandardProgress() {
             <div className="stat-label">Total Levels</div>
           </div>
           <div className="stat-item">
-            <div className="stat-value">{getTotalXP()}</div>
+            <div className="stat-value">{parseFloat(getTotalXP().toFixed(2))}</div>
             <div className="stat-label">Total XP</div>
           </div>
           <div className="stat-item">
@@ -1277,11 +1277,11 @@ function StandardProgress() {
                       </div>
                       <div className="detail-item">
                         <span className="detail-label">XP Progress:</span>
-                        <span className="detail-value">{opportunity.current_xp}/100</span>
+                        <span className="detail-value">{parseFloat(opportunity.current_xp.toFixed(2))}/100</span>
                       </div>
                       <div className="detail-item">
                         <span className="detail-label">XP to Next Level:</span>
-                        <span className="detail-value">{100 - opportunity.current_xp}</span>
+                        <span className="detail-value">{parseFloat((100 - opportunity.current_xp).toFixed(2))}</span>
                       </div>
                       <div className="detail-item">
                         <span className="detail-label">Created:</span>
