@@ -700,14 +700,14 @@ function AntagonistCard({ antagonist, taggedTitles = [], lastHitDaysAgo, recentC
             }} />
           </div>
           <div style={{ marginTop: 4, fontSize: '0.7rem', color: GM.textDim, display: 'flex', justifyContent: 'space-between' }}>
-            <span>{antagonist.currentHP} / {maxHP} HP</span>
+            <span>{parseFloat(antagonist.currentHP.toFixed(2))} / {maxHP} HP</span>
             <span>{Math.round(hpPct)}%</span>
           </div>
         </div>
 
         {/* Collapsed stats row */}
         <div style={{ marginTop: 8, display: 'flex', gap: 14, fontSize: '0.72rem', color: GM.textDim, flexWrap: 'wrap' }}>
-          <span>{antagonist.totalDamageDealt} total damage dealt</span>
+          <span>{parseFloat(antagonist.totalDamageDealt.toFixed(2))} total damage dealt</span>
           <span>Fighting {createdDays}d</span>
           {lastHitDaysAgo !== null && (
             <span>Last hit: {lastHitDaysAgo === 0 ? 'today' : `${lastHitDaysAgo}d ago`}</span>
