@@ -38,7 +38,8 @@
       "Bash(npm cache *)",
       "Bash(npx eslint *)",
       "Bash(git stash *)",
-      "Bash(npx esbuild *)"
+      "Bash(npx esbuild *)",
+      "Bash(git ls-remote *)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
