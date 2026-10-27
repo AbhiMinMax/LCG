@@ -508,6 +508,9 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldP
             <span className={labelAnimClass} style={{ fontWeight: 600, color: GM.text }}>
               {displayLabel}
             </span>
+            <span style={{ marginLeft: 6, color: GM.textDim }}>
+              Lv.{lvInfo.level}
+            </span>
             {rebirths > 0 && (
               <span style={{ marginLeft: 6, color: GM.gold, fontSize: '0.8rem', letterSpacing: '0.05em' }}>
                 {getRebirthSymbols(rebirths, pathKey)}
@@ -581,7 +584,9 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldP
           </div>
           {lvInfo.xpToNext != null ? (
             <div>
-              <span style={{ color: GM.text, fontWeight: 500 }}>XP to {lvInfo.nextLabel} </span>
+              <span style={{ color: GM.text, fontWeight: 500 }}>
+                XP to {lvInfo.nextLabel} (Lv.{lvInfo.level + 1}){' '}
+              </span>
               {parseFloat(lvInfo.xpToNext.toFixed(2))}
             </div>
           ) : (

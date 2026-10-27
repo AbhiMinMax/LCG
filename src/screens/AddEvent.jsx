@@ -312,7 +312,7 @@ function AddEvent() {
                   const lv = getPathLevel(opp.game_xp || 0, opp.path || 'default');
                   return (
                     <li key={opp.id}>
-                      {opp.title}: {lv.fullLabel} ({parseFloat(lv.xpIntoLevel.toFixed(2))}/{parseFloat(lv.xpForLevel.toFixed(2))} XP)
+                      {opp.title}: {lv.fullLabel} (Lv.{lv.level}, {parseFloat(lv.xpIntoLevel.toFixed(2))}/{parseFloat(lv.xpForLevel.toFixed(2))} XP)
                       <span style={{fontSize: '0.85em', color: 'var(--text-secondary)', marginLeft: '6px'}}>
                         | Game XP: {parseFloat((opp.game_xp || 0).toFixed(2))}
                       </span>
@@ -649,9 +649,9 @@ function AddEvent() {
                     <li key={opp.id}>
                       <strong>{opp.title}</strong>
                       {rebNow > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebNow, pathKey)}</span>}
-                      {' '}({lvNow.fullLabel}, {parseFloat(lvNow.xpIntoLevel.toFixed(2))}/{lvNow.xpForLevel} XP)
+                      {' '}({lvNow.fullLabel}, Lv.{lvNow.level}, {parseFloat(lvNow.xpIntoLevel.toFixed(2))}/{lvNow.xpForLevel} XP)
                       <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                        After: {lvNext.fullLabel}
+                        After: {lvNext.fullLabel} (Lv.{lvNext.level})
                         {rebNext > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebNext, pathKey)}</span>}
                         , {parseFloat(lvNext.xpIntoLevel.toFixed(2))}/{lvNext.xpForLevel} XP
                         {rebirth && <span style={{ color: '#c8a84b', fontWeight: 'bold', marginLeft: '8px' }}>{getNewRebirthSymbol(rebNext, pathKey)} Rebirth!</span>}
