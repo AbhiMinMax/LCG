@@ -3,7 +3,7 @@ import { db, dbHelpers, ensureDefaultData, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import { ThoughtPair } from '../components/ThoughtPassage';
-import { PATHS, PATH_KEYS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
+import { PATHS, PATH_KEYS, PATH_LOCK_THRESHOLD, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
 import { computeBosses } from '../utils/bossUtils';
 import './ProgressStyles.css';
 
@@ -1584,7 +1584,7 @@ function Customize() {
                     )}
                     {!editingOpportunity?.path_locked && (
                       <small style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
-                        Path locks permanently after reaching level 3 (700 game XP).
+                        Path locks permanently after reaching level 3 ({PATH_LOCK_THRESHOLD} game XP).
                       </small>
                     )}
                   </div>
@@ -1629,8 +1629,22 @@ function Customize() {
                   <div className="item-title-section">
                     <h4>{opportunity.title}</h4>
                     <div className="opportunity-stats" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <span className="level-badge">Level {opportunity.current_level}</span>
-                      <span className="xp-text">{opportunity.current_xp}/100 XP</span>
+                      {gameModeEnabled ? (() => {
+                        const lv = getPathLevel(opportunity.game_xp || 0, opportunity.path || 'default');
+                        return (
+                          <>
+                            <span className="level-badge">Level {lv.level}</span>
+                            <span className="xp-text">
+                              {parseFloat(lv.xpIntoLevel.toFixed(2))}/{parseFloat(lv.xpForLevel.toFixed(2))} XP
+                            </span>
+                          </>
+                        );
+                      })() : (
+                        <>
+                          <span className="level-badge">Level {opportunity.current_level}</span>
+                          <span className="xp-text">{parseFloat((opportunity.current_xp || 0).toFixed(2))}/100 XP</span>
+                        </>
+                      )}
                       {gameModeEnabled && (() => {
                         const pathKey = opportunity.path || 'default';
                         const pathInfo = PATHS[pathKey];
@@ -1796,7 +1810,11 @@ function Customize() {
                 <div className="progress-bar">
                   <div
                     className="progress-fill"
-                    style={{ width: `${opportunity.current_xp}%` }}
+                    style={{
+                      width: `${gameModeEnabled
+                        ? getPathLevel(opportunity.game_xp || 0, opportunity.path || 'default').progressPct
+                        : (opportunity.current_xp || 0)}%`
+                    }}
                   />
                 </div>
               </div>

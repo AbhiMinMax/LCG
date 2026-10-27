@@ -307,16 +307,24 @@ function AddEvent() {
           <div>
             <strong>Affected Opportunities:</strong>
             <ul>
-              {lastResult.updatedOpportunities.map(opp => (
-                <li key={opp.id}>
-                  {opp.title}: Level {opp.current_level} ({opp.current_xp}/100 XP)
-                  {gameModeEnabled && opp.game_xp != null && (
-                    <span style={{fontSize: '0.85em', color: 'var(--text-secondary)', marginLeft: '6px'}}>
-                      | Game XP: {opp.game_xp}
-                    </span>
-                  )}
-                </li>
-              ))}
+              {lastResult.updatedOpportunities.map(opp => {
+                if (gameModeEnabled) {
+                  const lv = getPathLevel(opp.game_xp || 0, opp.path || 'default');
+                  return (
+                    <li key={opp.id}>
+                      {opp.title}: {lv.fullLabel} ({parseFloat(lv.xpIntoLevel.toFixed(2))}/{parseFloat(lv.xpForLevel.toFixed(2))} XP)
+                      <span style={{fontSize: '0.85em', color: 'var(--text-secondary)', marginLeft: '6px'}}>
+                        | Game XP: {parseFloat((opp.game_xp || 0).toFixed(2))}
+                      </span>
+                    </li>
+                  );
+                }
+                return (
+                  <li key={opp.id}>
+                    {opp.title}: Level {opp.current_level} ({parseFloat((opp.current_xp || 0).toFixed(2))}/100 XP)
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>
@@ -641,11 +649,11 @@ function AddEvent() {
                     <li key={opp.id}>
                       <strong>{opp.title}</strong>
                       {rebNow > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebNow, pathKey)}</span>}
-                      {' '}({lvNow.fullLabel}, {lvNow.xpIntoLevel}/{lvNow.xpForLevel} XP)
+                      {' '}({lvNow.fullLabel}, {parseFloat(lvNow.xpIntoLevel.toFixed(2))}/{lvNow.xpForLevel} XP)
                       <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginTop: '2px' }}>
                         After: {lvNext.fullLabel}
                         {rebNext > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebNext, pathKey)}</span>}
-                        , {lvNext.xpIntoLevel}/{lvNext.xpForLevel} XP
+                        , {parseFloat(lvNext.xpIntoLevel.toFixed(2))}/{lvNext.xpForLevel} XP
                         {rebirth && <span style={{ color: '#c8a84b', fontWeight: 'bold', marginLeft: '8px' }}>{getNewRebirthSymbol(rebNext, pathKey)} Rebirth!</span>}
                         {levelUp && <span style={{ color: '#28a745', fontWeight: 'bold', marginLeft: '8px' }}>↑ Level up!</span>}
                       </div>
