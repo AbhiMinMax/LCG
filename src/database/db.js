@@ -1,6 +1,63 @@
 // Offline-first database using Dexie (IndexedDB wrapper)
 import Dexie from 'dexie';
-import { PATH_LOCK_THRESHOLD } from '../utils/pathUtils';
+import { PATH_LOCK_THRESHOLD, XP_PER_LEVEL, REBIRTH_XP } from '../utils/pathUtils';
+
+// FROZEN — the path level curve as it stood before the flat-XP change.
+// Used only by the version 9 upgrade. Never re-tune these: the upgrade has to
+// keep producing the same answer for a database first opened years from now.
+const OLD_CURVE_THRESHOLDS = [
+  0, 300, 700, 1200, 1800, 2600, 3600, 4800, 6200, 7800, 9600,
+  11600, 13800, 16200, 18800, 21600, 24600, 27800, 31200, 34800, 38600,
+];
+
+/**
+ * Map a game_xp earned under the old escalating curve onto a flat curve,
+ * preserving the rebirth count, the level number and the position within that
+ * level. Pure, so the version 9 upgrade can be tested directly.
+ *
+ * The flat curve is passed in rather than imported so each database lands on
+ * whatever curve is current when it upgrades.
+ *
+ * Returns null when there is nothing to rescale (no XP, or a corrupt value —
+ * left alone for getPathLevel's own clamping rather than inventing a position).
+ */
+export function rescaleOldCurveXp(oldGameXp, xpPerLevel, rebirthXp) {
+  const oldXp = Number(oldGameXp);
+  if (!Number.isFinite(oldXp) || oldXp <= 0) return null;
+
+  const OLD_MAX_LEVEL  = OLD_CURVE_THRESHOLDS.length;             // 21
+  const OLD_REBIRTH_XP = OLD_CURVE_THRESHOLDS[OLD_MAX_LEVEL - 1]; // 38600
+
+  // Where this opportunity sat on the old curve.
+  const rebirths = Math.floor(oldXp / OLD_REBIRTH_XP);
+  const cycleXp  = oldXp % OLD_REBIRTH_XP;
+  let level = 1;
+  for (let i = 1; i < OLD_MAX_LEVEL; i++) {
+    if (cycleXp >= OLD_CURVE_THRESHOLDS[i]) level = i + 1;
+    else break;
+  }
+  const start = OLD_CURVE_THRESHOLDS[level - 1];
+  // Level 21 was unreachable (cycleXp never reached its threshold), but guard
+  // the zero-width span anyway so fraction stays finite.
+  const end   = level < OLD_MAX_LEVEL ? OLD_CURVE_THRESHOLDS[level] : OLD_REBIRTH_XP;
+  const span  = end - start;
+  const fraction = span > 0 ? (cycleXp - start) / span : 0;
+
+  // Same level, same bar position, on the flat curve. Held just under a full
+  // level so 2dp rounding can never tip into the next one.
+  const intoLevel = Math.min(
+    Math.round(fraction * xpPerLevel * 100) / 100,
+    xpPerLevel - 0.01
+  );
+  const newXp = rebirths * rebirthXp + (level - 1) * xpPerLevel + intoLevel;
+
+  return {
+    newXp: Math.round(newXp * 100) / 100,
+    rebirths,
+    level,
+    fraction,
+  };
+}
 
 export class LifeProgressDB extends Dexie {
   constructor() {
@@ -131,6 +188,56 @@ export class LifeProgressDB extends Dexie {
       events: '++id, title, situation_id, event_description, choice_value, xp_change, game_xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
       config: '++id, key, value',
       antagonists: '++id, name, status, createdAt'
+    });
+
+    // Version 9: Rescale game_xp from the old escalating level curve onto the
+    // flat curve in pathUtils, keeping each opportunity's rebirth count, level
+    // number and position within that level exactly as they read before.
+    //
+    // Without this, the same stored game_xp simply means something new: the old
+    // curve was front-loaded cheap (300 for level 2, 3800 for level 20), so
+    // re-reading it against a flat cost pushes mid-path opportunities up many
+    // levels and converts anything past one flat cycle into extra rebirth stars.
+    //
+    // The mapping lives in rescaleOldCurveXp above, against the frozen
+    // OLD_CURVE_THRESHOLDS. The old side must never read the live constants —
+    // this upgrade has to keep producing the same answer for a database first
+    // opened years from now. The new side is passed them on purpose, so each
+    // database lands on whatever flat curve is current when it upgrades.
+    //
+    // Each opportunity's pre-migration value is kept in game_xp_pre_flat so the
+    // rescale can be undone, and updated_at is bumped so the cloud sync treats
+    // the local row as the newer one (its change detection ignores game_xp).
+    this.version(9).stores({
+      situations: '++id, title, description, tags, isMeta, challenging_level, created_at, updated_at',
+      opportunities: '++id, title, description, tags, current_xp, game_xp, path, path_locked, archived, current_level, created_at, updated_at',
+      situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
+      events: '++id, title, situation_id, event_description, choice_value, xp_change, game_xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
+      config: '++id, key, value',
+      antagonists: '++id, name, status, createdAt'
+    }).upgrade(tx => {
+      let rescaled = 0;
+      return tx.opportunities.toCollection().modify(opp => {
+        const pos = rescaleOldCurveXp(opp.game_xp, XP_PER_LEVEL, REBIRTH_XP);
+        if (!pos) return;
+
+        const oldXp = opp.game_xp;
+        opp.game_xp_pre_flat = oldXp;            // kept so this is reversible
+        opp.game_xp    = pos.newXp;
+        opp.updated_at = new Date();             // so cloud sync carries it up
+        rescaled++;
+        console.log(
+          `[db v9 flat-xp] "${opp.title}" game_xp ${oldXp} -> ${pos.newXp} ` +
+          `(kept star ${pos.rebirths}, level ${pos.level}, ` +
+          `${Math.round(pos.fraction * 100)}% through it)`
+        );
+      }).then(() => {
+        console.log(
+          `[db v9 flat-xp] rescaled ${rescaled} ` +
+          `${rescaled === 1 ? 'opportunity' : 'opportunities'} onto the flat curve ` +
+          `(${XP_PER_LEVEL} XP/level, ${REBIRTH_XP} XP/star)`
+        );
+      });
     });
   }
 }
