@@ -501,9 +501,6 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldP
             <span style={{ fontWeight: 600, fontSize: '0.92rem', color: GM.text }}>
               {opp.title}
             </span>
-            {opp.path_locked && (
-              <span style={{ fontSize: '0.68rem', color: GM.gold, opacity: 0.8 }}>🔒</span>
-            )}
           </div>
           <div style={{ marginTop: 4, fontSize: '0.76rem', color: GM.textDim }}>
             {pathInfo.name}

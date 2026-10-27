@@ -35,7 +35,10 @@
       "Bash(grep -v \"//\\\\|===\\\\|!==\\\\|>=\\\\|<=\\\\|>\\\\|<\\\\|getPath\\\\|getRebi\\\\|\\\\\\\\.filter\\\\|\\\\\\\\.map\\\\|\\\\\\\\.find\\\\|\\\\\\\\.sort\\\\|\\\\\\\\.reduce\\\\|const \\\\|let \\\\|if \\\\|?\\\\|Math\\\\.\")",
       "Bash(grep -v \"//\\\\|===\\\\|!==\\\\|>=\\\\|<=\\\\|>\\\\|<\\\\|getPath\\\\|getRebi\\\\|\\\\\\\\.filter\\\\|\\\\\\\\.map\\\\|\\\\\\\\.find\\\\|\\\\\\\\.sort\\\\|\\\\\\\\.reduce\\\\|const \\\\|let \\\\|if \\\\|?\\\\|Math\\\\.\\\\|game_xp\\\\b\\\\|game_xp_\")",
       "Bash(findstr /n \"getDisplayXp\\\\|xp_change\\\\|game_xp_change\\\\|hpDelta\\\\|totalDamage\\\\|currentHP\" src\\\\screens\\\\CheckHistory.jsx)",
-      "Bash(npm cache *)"
+      "Bash(npm cache *)",
+      "Bash(npx eslint *)",
+      "Bash(git stash *)",
+      "Bash(npx esbuild *)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

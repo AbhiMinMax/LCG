@@ -3,7 +3,7 @@ import { db, dbHelpers, ensureDefaultData, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import { ThoughtPair } from '../components/ThoughtPassage';
-import { PATHS, PATH_KEYS, PATH_LOCK_THRESHOLD, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
+import { PATHS, PATH_KEYS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
 import { computeBosses } from '../utils/bossUtils';
 import './ProgressStyles.css';
 
@@ -472,10 +472,7 @@ function Customize() {
           opportunityForm.tags,
           opportunityForm.initialLevel
         );
-        // Update path only if not locked
-        if (!editingOpportunity.path_locked) {
-          await dbHelpers.updateOpportunityPath(editingOpportunity.id, opportunityForm.path);
-        }
+        await dbHelpers.updateOpportunityPath(editingOpportunity.id, opportunityForm.path);
       } else {
         await dbHelpers.createOpportunity(
           opportunityForm.title,
@@ -1532,61 +1529,45 @@ function Customize() {
                 {/* Path selection — only shown when game mode is enabled */}
                 {gameModeEnabled && (
                   <div className="form-group">
-                    <label className="form-label">
-                      Growth Path
-                      {editingOpportunity?.path_locked && (
-                        <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: 'var(--warning)', background: 'rgba(255,193,7,0.15)', padding: '2px 8px', borderRadius: '12px' }}>
-                          🔒 Locked at level 3
-                        </span>
-                      )}
-                    </label>
-                    {editingOpportunity?.path_locked ? (
-                      <div style={{ padding: '10px 14px', background: 'var(--bg-secondary, #f5f5f5)', border: '1px solid #ccc', borderRadius: '8px', fontSize: '0.9rem' }}>
-                        {PATHS[opportunityForm.path]?.icon} {PATHS[opportunityForm.path]?.name} — <em>{PATHS[opportunityForm.path]?.philosophy}</em>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Path is permanently locked. It cannot be changed.</div>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {PATH_KEYS.map(key => {
-                          const p = PATHS[key];
-                          const isSelected = opportunityForm.path === key;
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => setOpportunityForm({ ...opportunityForm, path: key })}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: '10px',
-                                padding: '10px 12px',
-                                border: isSelected ? '2px solid #1976d2' : '1px solid #ccc',
-                                borderRadius: '8px',
-                                background: isSelected ? 'rgba(25,118,210,0.15)' : 'var(--bg-secondary)',
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                              }}
-                            >
-                              <span style={{ fontSize: '1.2em', lineHeight: 1.2 }}>{p.icon}</span>
-                              <div>
-                                <div style={{ fontWeight: isSelected ? 700 : 500, fontSize: '0.9rem', color: isSelected ? '#2196f3' : 'var(--text-primary)' }}>
-                                  {p.name}
-                                </div>
-                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>{p.philosophy}</div>
-                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>
-                                  {p.labels.join(' → ')}
-                                </div>
+                    <label className="form-label">Growth Path</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {PATH_KEYS.map(key => {
+                        const p = PATHS[key];
+                        const isSelected = opportunityForm.path === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setOpportunityForm({ ...opportunityForm, path: key })}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '10px',
+                              padding: '10px 12px',
+                              border: isSelected ? '2px solid #1976d2' : '1px solid #ccc',
+                              borderRadius: '8px',
+                              background: isSelected ? 'rgba(25,118,210,0.15)' : 'var(--bg-secondary)',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                            }}
+                          >
+                            <span style={{ fontSize: '1.2em', lineHeight: 1.2 }}>{p.icon}</span>
+                            <div>
+                              <div style={{ fontWeight: isSelected ? 700 : 500, fontSize: '0.9rem', color: isSelected ? '#2196f3' : 'var(--text-primary)' }}>
+                                {p.name}
                               </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {!editingOpportunity?.path_locked && (
-                      <small style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
-                        Path locks permanently after reaching level 3 ({PATH_LOCK_THRESHOLD} game XP).
-                      </small>
-                    )}
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>{p.philosophy}</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+                                {p.labels.join(' → ')}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <small style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginTop: '4px' }}>
+                      Sets how this opportunity&apos;s levels are named. Can be changed at any time.
+                    </small>
                   </div>
                 )}
 
@@ -1651,22 +1632,17 @@ function Customize() {
                         const levelInfo = getPathLevel(opportunity.game_xp || 0, pathKey);
                         const { rebirths } = getRebirthInfo(opportunity.game_xp || 0);
                         return (
-                          <>
-                            <span style={{
-                              background: 'rgba(156,39,176,0.15)',
-                              color: '#ab47bc',
-                              padding: '2px 8px',
-                              borderRadius: '12px',
-                              fontSize: '0.75rem',
-                              fontWeight: 600
-                            }}>
-                              {pathInfo.icon} {levelInfo.fullLabel}
-                              {rebirths > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebirths, opportunity.path)}</span>}
-                            </span>
-                            {opportunity.path_locked && (
-                              <span style={{ fontSize: '0.72rem', color: 'var(--warning)' }}>🔒</span>
-                            )}
-                          </>
+                          <span style={{
+                            background: 'rgba(156,39,176,0.15)',
+                            color: '#ab47bc',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600
+                          }}>
+                            {pathInfo.icon} {levelInfo.fullLabel}
+                            {rebirths > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebirths, opportunity.path)}</span>}
+                          </span>
                         );
                       })()}
                       {(eventCountsPerOpp[opportunity.id] || 0) > 0 && (

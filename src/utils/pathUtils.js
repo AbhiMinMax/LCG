@@ -82,9 +82,6 @@ export const LEVEL_THRESHOLDS = Array.from(
 // completing it earns one rebirth star and resets the cycle.
 export const REBIRTH_XP = MAX_LEVEL * XP_PER_LEVEL; // 5600
 
-// game_xp at which path locks (level 3 threshold)
-export const PATH_LOCK_THRESHOLD = LEVEL_THRESHOLDS[2]; // 400
-
 // ─── Per-path rebirth symbols ─────────────────────────────────────────────────
 // Three tiers: first rebirth, second, third-and-beyond.
 // ★ is intentionally excluded — it is used elsewhere for mastery streaks.

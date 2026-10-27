@@ -202,6 +202,10 @@ export function computeUnlockedTraitIds(opportunities, events, situations, oppSt
   }
   const emotionalRealRatio = emotionalTotal > 0 ? emotionalReal / emotionalTotal : 0;
 
+  // The level gates below are raw level numbers, so they silently re-anchor if
+  // the path's level count changes. They were tuned against a 21-level path and
+  // rescaled by 28/21 when it grew: 4→5, 7→9, 10→13, 13→17, keeping each gate
+  // at the same proportional depth. Re-scale them again if MAX_LEVEL moves.
   const getLevel = (opp) => getPathLevel(opp.game_xp || 0, opp.path || 'default').level;
 
   const recoveryBestAny = opportunities.length > 0
@@ -220,19 +224,19 @@ export function computeUnlockedTraitIds(opportunities, events, situations, oppSt
       case 'steady':
         unlocked = totalEvents >= 20 && opportunities.some(o =>
           o.path === 'emotional' &&
-          getLevel(o) >= 7 &&
+          getLevel(o) >= 9 &&
           (oppHistory[o.id]?.maxAttemptStreak || 0) >= 7
         );
         break;
       case 'forged':
         unlocked = highDiffWellDone >= 15 &&
           maxRecentFailureRun <= 4 &&
-          opportunities.some(o => getLevel(o) >= 7);
+          opportunities.some(o => getLevel(o) >= 9);
         break;
       case 'the_returner':
         unlocked = recoveryBestAny >= 8 &&
           totalRecoveryCount >= 5 &&
-          opportunities.some(o => getLevel(o) >= 4);
+          opportunities.some(o => getLevel(o) >= 5);
         break;
       case 'broadminded':
         unlocked = weeksWithBreadth7 >= 3 &&
@@ -243,36 +247,36 @@ export function computeUnlockedTraitIds(opportunities, events, situations, oppSt
         unlocked = totalEvents >= 30 &&
           realRatio > 0.6 &&
           opportunities.some(o =>
-            (o.path === 'emotional' || o.path === 'behavioral') && getLevel(o) >= 7
+            (o.path === 'emotional' || o.path === 'behavioral') && getLevel(o) >= 9
           );
         break;
       case 'relentless':
         unlocked = totalEvents >= 50 &&
           histAttemptBest >= 15 &&
-          opportunities.some(o => getLevel(o) >= 13);
+          opportunities.some(o => getLevel(o) >= 17);
         break;
       case 'the_adaptor':
         unlocked = realSitIds.size >= 10 &&
           breadthSitIds.size >= 10 &&
           opportunities.some(o =>
-            (o.path === 'behavioral' || o.path === 'cognitive') && getLevel(o) >= 7
+            (o.path === 'behavioral' || o.path === 'cognitive') && getLevel(o) >= 9
           );
         break;
       case 'unguarded':
         unlocked = emotionalTotal >= 20 &&
           emotionalRealRatio > 0.7 &&
-          emotionalOpps.some(o => getLevel(o) >= 4);
+          emotionalOpps.some(o => getLevel(o) >= 5);
         break;
       case 'the_long_game':
         unlocked = calendarDays >= 90 &&
           maxWeeklyEvents <= 15 &&
-          opportunities.some(o => getLevel(o) >= 10);
+          opportunities.some(o => getLevel(o) >= 13);
         break;
       case 'clear':
         unlocked = wellDoneCount >= 10 &&
           opportunities.some(o =>
             o.path === 'cognitive' &&
-            getLevel(o) >= 7 &&
+            getLevel(o) >= 9 &&
             (oppHistory[o.id]?.maxMasteryStreak || 0) >= 5
           );
         break;

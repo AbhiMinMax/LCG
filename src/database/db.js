@@ -1,6 +1,6 @@
 // Offline-first database using Dexie (IndexedDB wrapper)
 import Dexie from 'dexie';
-import { PATH_LOCK_THRESHOLD, XP_PER_LEVEL, REBIRTH_XP } from '../utils/pathUtils';
+import { XP_PER_LEVEL, REBIRTH_XP } from '../utils/pathUtils';
 
 // FROZEN — the path level curve as it stood before the flat-XP change.
 // Used only by the version 9 upgrade. Never re-tune these: the upgrade has to
@@ -237,6 +237,29 @@ export class LifeProgressDB extends Dexie {
           `${rescaled === 1 ? 'opportunity' : 'opportunities'} onto the flat curve ` +
           `(${XP_PER_LEVEL} XP/level, ${REBIRTH_XP} XP/star)`
         );
+      });
+    });
+
+    // Version 10: Drop path locking. A path only sets how an opportunity's
+    // levels are named, so freezing it was a commitment with no upside. Both
+    // the index and the stored flag go: a lingering true would silently
+    // re-lock a path if the guard were ever reintroduced.
+    this.version(10).stores({
+      situations: '++id, title, description, tags, isMeta, challenging_level, created_at, updated_at',
+      opportunities: '++id, title, description, tags, current_xp, game_xp, path, archived, current_level, created_at, updated_at',
+      situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
+      events: '++id, title, situation_id, event_description, choice_value, xp_change, game_xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
+      config: '++id, key, value',
+      antagonists: '++id, name, status, createdAt'
+    }).upgrade(tx => {
+      let cleared = 0;
+      return tx.opportunities.toCollection().modify(opp => {
+        if (opp.path_locked !== undefined) {
+          delete opp.path_locked;
+          cleared++;
+        }
+      }).then(() => {
+        console.log(`[db v10 drop-path-lock] removed the flag from ${cleared} opportunities`);
       });
     });
   }
@@ -1049,14 +1072,8 @@ export const dbHelpers = {
         // Also accumulate game XP when game mode is on
         if (isGameMode && gameXpChange !== null) {
           const newGameXp = Math.max(0, (opportunity.game_xp || 0) + gameXpChange);
-          const pathUpdates = { game_xp: newGameXp };
-          // Lock path permanently once level 3 threshold is crossed
-          if (!opportunity.path_locked && newGameXp >= PATH_LOCK_THRESHOLD) {
-            pathUpdates.path_locked = true;
-          }
-          await db.opportunities.update(opportunity.id, pathUpdates);
+          await db.opportunities.update(opportunity.id, { game_xp: newGameXp });
           updated.game_xp = newGameXp;
-          if (pathUpdates.path_locked) updated.path_locked = true;
         }
         updatedOpportunities.push(updated);
       }
@@ -1289,7 +1306,6 @@ export const dbHelpers = {
       game_xp: 0,
       current_level: level,
       path: path || 'default',
-      path_locked: false,
       created_at: new Date(),
       updated_at: new Date()
     };
@@ -1336,11 +1352,7 @@ export const dbHelpers = {
         const delta = oppDelta[opp.id] || 0;
         if (delta !== 0) {
           const newGameXp = Math.max(0, (opp.game_xp || 0) + delta);
-          const changes = { game_xp: newGameXp };
-          if (!opp.path_locked && newGameXp >= PATH_LOCK_THRESHOLD) {
-            changes.path_locked = true;
-          }
-          oppUpdates.push({ key: opp.id, changes });
+          oppUpdates.push({ key: opp.id, changes: { game_xp: newGameXp } });
         }
       }
 
@@ -1354,11 +1366,11 @@ export const dbHelpers = {
     }
   },
 
-  // Update path for an opportunity (only if not locked)
+  // Update path for an opportunity. Paths stay changeable for the life of the
+  // opportunity — the label words are a framing, not a commitment.
   async updateOpportunityPath(id, path) {
     const opp = await db.opportunities.get(id);
     if (!opp) return null;
-    if (opp.path_locked) return opp; // silently no-op if locked
     await db.opportunities.update(id, { path, updated_at: new Date() });
     return await db.opportunities.get(id);
   },
