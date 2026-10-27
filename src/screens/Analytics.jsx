@@ -16,7 +16,14 @@ import {
 import { Bar, Line, Pie, Doughnut, Radar, PolarArea } from 'react-chartjs-2';
 import { dbHelpers, db } from '../database/db';
 import { useTheme } from '../hooks/useTheme';
-import { analyticsUtils } from '../utils/analyticsUtils';
+import {
+  analyticsUtils,
+  oppLevel,
+  oppXpIntoLevel,
+  oppTotalXp,
+  oppLevelsGained,
+  eventXp,
+} from '../utils/analyticsUtils';
 import { generateDailyNarrative, generateWeeklyNarrative, generateMonthlyNarrative } from '../utils/narrativeUtils';
 import './Analytics.css';
 
@@ -512,11 +519,19 @@ function Analytics() {
 
   const colors = getChartColors();
 
+  // Bound to whichever XP system is active, so everything below reports the
+  // same numbers the progress screen shows. analyticsUtils documents each one.
+  const lvl       = opp => oppLevel(opp, gameModeEnabled);
+  const xpInLevel = opp => oppXpIntoLevel(opp, gameModeEnabled);
+  const totalXp   = opp => oppTotalXp(opp, gameModeEnabled);
+  const levelsUp  = opp => oppLevelsGained(opp, gameModeEnabled);
+  const evXp      = ev  => eventXp(ev, gameModeEnabled);
+
   // Opportunities Level Distribution Chart
   const getOpportunityLevelsChart = () => {
     const levelCounts = {};
     filteredData.opportunities.forEach(opp => {
-      levelCounts[opp.current_level] = (levelCounts[opp.current_level] || 0) + 1;
+      levelCounts[lvl(opp)] = (levelCounts[lvl(opp)] || 0) + 1;
     });
 
     return {
@@ -537,8 +552,8 @@ function Analytics() {
     return {
       labels: filteredData.opportunities.map(opp => opp.title),
       datasets: [{
-        label: 'Current XP',
-        data: filteredData.opportunities.map(opp => opp.current_xp),
+        label: gameModeEnabled ? 'XP in current level' : 'Current XP',
+        data: filteredData.opportunities.map(opp => xpInLevel(opp)),
         backgroundColor: colors.success,
         borderColor: colors.success,
         borderWidth: 2,
@@ -603,14 +618,14 @@ function Analytics() {
   // Top Performing Opportunities
   const getTopOpportunitiesChart = () => {
     const topOpps = [...filteredData.opportunities]
-      .sort((a, b) => (b.current_level * 100 + b.current_xp) - (a.current_level * 100 + a.current_xp))
+      .sort((a, b) => totalXp(b) - totalXp(a))
       .slice(0, 6);
 
     return {
       labels: topOpps.map(opp => opp.title),
       datasets: [{
         label: 'Total Progress',
-        data: topOpps.map(opp => opp.current_level * 100 + opp.current_xp),
+        data: topOpps.map(opp => totalXp(opp)),
         backgroundColor: [
           colors.primary,
           colors.secondary,
@@ -654,7 +669,7 @@ function Analytics() {
       labels: topOpps.map(opp => opp.title),
       datasets: [{
         label: 'Current Level',
-        data: topOpps.map(opp => opp.current_level),
+        data: topOpps.map(opp => lvl(opp)),
         backgroundColor: colors.primary + '40',
         borderColor: colors.primary,
         borderWidth: 2,
@@ -675,7 +690,7 @@ function Analytics() {
         monthlyData[key] = { events: 0, totalXp: 0 };
       }
       monthlyData[key].events++;
-      monthlyData[key].totalXp += event.xp_change || 0;
+      monthlyData[key].totalXp += evXp(event);
     });
 
     const sortedMonths = Object.keys(monthlyData).sort((a, b) => {
@@ -776,7 +791,7 @@ function Analytics() {
     const dailyXP = {};
     filteredData.events.forEach(event => {
       const date = new Date(event.timestamp).toLocaleDateString();
-      dailyXP[date] = (dailyXP[date] || 0) + (event.xp_change || 0);
+      dailyXP[date] = (dailyXP[date] || 0) + evXp(event);
     });
 
     const sortedDates = Object.keys(dailyXP).sort((a, b) => new Date(a) - new Date(b));
@@ -1129,7 +1144,7 @@ function Analytics() {
           <div className="stat-content">
             <h3>
               {filteredData.opportunities.length > 0 
-                ? Math.round(filteredData.opportunities.reduce((sum, opp) => sum + opp.current_level, 0) / filteredData.opportunities.length * 10) / 10
+                ? Math.round(filteredData.opportunities.reduce((sum, opp) => sum + lvl(opp), 0) / filteredData.opportunities.length * 10) / 10
                 : 0
               }
             </h3>
@@ -1151,7 +1166,7 @@ function Analytics() {
       <div className="insights-section">
         <h3>💡 Insights & Recommendations</h3>
         <div className="insights-grid">
-          {analyticsUtils.generateInsights(filteredData.opportunities, filteredData.events).map((insight, index) => (
+          {analyticsUtils.generateInsights(filteredData.opportunities, filteredData.events, gameModeEnabled).map((insight, index) => (
             <div key={index} className={`insight-card ${insight.priority}`}>
               <div className="insight-content">
                 <p>{insight.message}</p>
@@ -1218,20 +1233,20 @@ function Analytics() {
             <div className="summary-item">
               <span className="summary-label">Total XP Earned:</span>
               <span className="summary-value">
-                {filteredData.opportunities.reduce((sum, opp) => sum + opp.current_xp, 0)}
+                {parseFloat(filteredData.opportunities.reduce((sum, opp) => sum + totalXp(opp), 0).toFixed(2))}
               </span>
             </div>
             <div className="summary-item">
               <span className="summary-label">Levels Gained:</span>
               <span className="summary-value">
-                {filteredData.opportunities.reduce((sum, opp) => sum + (opp.current_level - 1), 0)}
+                {filteredData.opportunities.reduce((sum, opp) => sum + levelsUp(opp), 0)}
               </span>
             </div>
             <div className="summary-item">
               <span className="summary-label">Most Active Area:</span>
               <span className="summary-value">
-                {analyticsData.opportunities.length > 0 
-                  ? [...analyticsData.opportunities].sort((a, b) => b.current_xp - a.current_xp)[0]?.title || 'N/A'
+                {analyticsData.opportunities.length > 0
+                  ? [...analyticsData.opportunities].sort((a, b) => totalXp(b) - totalXp(a))[0]?.title || 'N/A'
                   : 'N/A'
                 }
               </span>
@@ -1377,12 +1392,12 @@ function Analytics() {
                       <div 
                         className="metric-fill" 
                         style={{ 
-                          width: `${analyticsUtils.getPerformanceMetrics(filteredData.events).excellenceRate}%`,
+                          width: `${analyticsUtils.getPerformanceMetrics(filteredData.events, gameModeEnabled).excellenceRate}%`,
                           backgroundColor: colors.success 
                         }}
                       ></div>
                       <span className="metric-value">
-                        {analyticsUtils.getPerformanceMetrics(filteredData.events).excellenceRate}%
+                        {analyticsUtils.getPerformanceMetrics(filteredData.events, gameModeEnabled).excellenceRate}%
                       </span>
                     </div>
                   </div>
@@ -1392,12 +1407,12 @@ function Analytics() {
                       <div 
                         className="metric-fill" 
                         style={{ 
-                          width: `${analyticsUtils.getPerformanceMetrics(filteredData.events).improvementRate}%`,
+                          width: `${analyticsUtils.getPerformanceMetrics(filteredData.events, gameModeEnabled).improvementRate}%`,
                           backgroundColor: colors.primary 
                         }}
                       ></div>
                       <span className="metric-value">
-                        {analyticsUtils.getPerformanceMetrics(filteredData.events).improvementRate}%
+                        {analyticsUtils.getPerformanceMetrics(filteredData.events, gameModeEnabled).improvementRate}%
                       </span>
                     </div>
                   </div>
@@ -1407,12 +1422,12 @@ function Analytics() {
                       <div 
                         className="metric-fill" 
                         style={{ 
-                          width: `${analyticsUtils.getPerformanceMetrics(filteredData.events).consistencyScore}%`,
+                          width: `${analyticsUtils.getPerformanceMetrics(filteredData.events, gameModeEnabled).consistencyScore}%`,
                           backgroundColor: colors.info 
                         }}
                       ></div>
                       <span className="metric-value">
-                        {analyticsUtils.getPerformanceMetrics(filteredData.events).consistencyScore}%
+                        {analyticsUtils.getPerformanceMetrics(filteredData.events, gameModeEnabled).consistencyScore}%
                       </span>
                     </div>
                   </div>
@@ -1443,20 +1458,20 @@ function Analytics() {
               <div className="summary-item">
                 <span className="summary-label">Total XP Earned:</span>
                 <span className="summary-value">
-                  {filteredData.opportunities.reduce((sum, opp) => sum + opp.current_xp, 0)}
+                  {parseFloat(filteredData.opportunities.reduce((sum, opp) => sum + totalXp(opp), 0).toFixed(2))}
                 </span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Levels Gained:</span>
                 <span className="summary-value">
-                  {filteredData.opportunities.reduce((sum, opp) => sum + (opp.current_level - 1), 0)}
+                  {filteredData.opportunities.reduce((sum, opp) => sum + levelsUp(opp), 0)}
                 </span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Most Active Area:</span>
                 <span className="summary-value">
-                  {filteredData.opportunities.length > 0 
-                    ? [...filteredData.opportunities].sort((a, b) => b.current_xp - a.current_xp)[0]?.title || 'N/A'
+                  {filteredData.opportunities.length > 0
+                    ? [...filteredData.opportunities].sort((a, b) => totalXp(b) - totalXp(a))[0]?.title || 'N/A'
                     : 'N/A'
                   }
                 </span>

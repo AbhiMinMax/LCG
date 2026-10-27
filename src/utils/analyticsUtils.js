@@ -1,18 +1,72 @@
 // Utility functions for analytics calculations
 
+import { getPathLevel, getRebirthInfo, MAX_LEVEL } from './pathUtils';
+
+// ─── Progress accessors ───────────────────────────────────────────────────────
+// Two XP systems coexist in the database. Classic mode stores a position on a
+// flat 100-XP-per-level ladder in current_xp/current_level. Game mode stores
+// lifetime game_xp and derives level, bar position and rebirth stars from the
+// path curve in pathUtils; its current_xp/current_level columns are still
+// written but describe the *other* system and must not be shown in game mode.
+//
+// Analytics is the one screen that has to read opportunities and events under
+// either system, so every level/XP figure there goes through an accessor below
+// instead of touching a column directly. Each takes the gameMode flag the
+// screen already loads from config.
+
+const CLASSIC_XP_PER_LEVEL = 100;
+
+// Level as the rest of the app displays it. In game mode that is the level
+// WITHIN the current rebirth cycle — matching the Lv.N on the progress screen —
+// so an opportunity that has rebirthed reads as a low level again, by design.
+export function oppLevel(opp, gameMode) {
+  if (gameMode) return getPathLevel(opp.game_xp || 0, opp.path || 'default').level;
+  return opp.current_level || 1;
+}
+
+// XP banked inside the current level: the progress bar's numerator.
+export function oppXpIntoLevel(opp, gameMode) {
+  if (gameMode) return getPathLevel(opp.game_xp || 0, opp.path || 'default').xpIntoLevel;
+  return opp.current_xp || 0;
+}
+
+// Lifetime XP, including everything spent on levels already completed and, in
+// game mode, on completed rebirth cycles. Use for totals and for ranking.
+export function oppTotalXp(opp, gameMode) {
+  if (gameMode) return opp.game_xp || 0;
+  return ((opp.current_level || 1) - 1) * CLASSIC_XP_PER_LEVEL + (opp.current_xp || 0);
+}
+
+// Levels earned since level 1, counting every completed cycle in game mode.
+export function oppLevelsGained(opp, gameMode) {
+  if (gameMode) {
+    const { rebirths } = getRebirthInfo(opp.game_xp || 0);
+    return rebirths * MAX_LEVEL + (oppLevel(opp, true) - 1);
+  }
+  return (opp.current_level || 1) - 1;
+}
+
+// An event's XP delta in whichever system is active. Events logged before game
+// mode existed have no game_xp_change, so fall back to xp_change for those —
+// the same rule CheckHistory uses when listing them.
+export function eventXp(event, gameMode) {
+  if (gameMode && event.game_xp_change != null) return event.game_xp_change;
+  return event.xp_change || 0;
+}
+
 export const analyticsUtils = {
   // Calculate XP growth rate over time
-  calculateGrowthRate(events, days = 30) {
+  calculateGrowthRate(events, days = 30, gameMode = false) {
     if (events.length < 2) return 0;
-    
+
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
-    
+
     const recentEvents = events.filter(event => new Date(event.timestamp) >= cutoffDate);
-    
+
     if (recentEvents.length === 0) return 0;
-    
-    const totalXpChange = recentEvents.reduce((sum, event) => sum + (event.xp_change || 0), 0);
+
+    const totalXpChange = recentEvents.reduce((sum, event) => sum + eventXp(event, gameMode), 0);
     return totalXpChange / days;
   },
 
@@ -89,17 +143,13 @@ export const analyticsUtils = {
   },
 
   // Calculate improvement trends
-  calculateImprovementTrend(opportunities) {
+  calculateImprovementTrend(opportunities, gameMode = false) {
     if (opportunities.length === 0) return 'stable';
-    
-    const totalProgress = opportunities.reduce((sum, opp) => 
-      sum + (opp.current_level * 100 + opp.current_xp), 0);
-    const avgProgress = totalProgress / opportunities.length;
-    
+
     // Simple trend calculation based on current levels
-    const highLevelOpps = opportunities.filter(opp => opp.current_level >= 3).length;
-    const lowLevelOpps = opportunities.filter(opp => opp.current_level === 1).length;
-    
+    const highLevelOpps = opportunities.filter(opp => oppLevel(opp, gameMode) >= 3).length;
+    const lowLevelOpps = opportunities.filter(opp => oppLevel(opp, gameMode) === 1).length;
+
     if (highLevelOpps > lowLevelOpps) return 'improving';
     if (lowLevelOpps > highLevelOpps) return 'declining';
     return 'stable';
@@ -128,7 +178,7 @@ export const analyticsUtils = {
   },
 
   // Calculate performance metrics
-  getPerformanceMetrics(events) {
+  getPerformanceMetrics(events, gameMode = false) {
     if (events.length === 0) {
       return {
         averageChoiceValue: 0,
@@ -145,7 +195,7 @@ export const analyticsUtils = {
     const excellenceRate = (excellentChoices / events.length) * 100;
     
     // Calculate improvement rate (positive XP changes vs negative)
-    const positiveXpEvents = events.filter(e => e.xp_change > 0).length;
+    const positiveXpEvents = events.filter(e => eventXp(e, gameMode) > 0).length;
     const improvementRate = (positiveXpEvents / events.length) * 100;
     
     // Calculate consistency score (how regularly events are logged)
@@ -166,7 +216,7 @@ export const analyticsUtils = {
   },
 
   // Generate insights based on data
-  generateInsights(opportunities, events) {
+  generateInsights(opportunities, events, gameMode = false) {
     const insights = [];
     
     // Streak insights
@@ -180,7 +230,7 @@ export const analyticsUtils = {
     }
     
     // Performance insights
-    const metrics = this.getPerformanceMetrics(events);
+    const metrics = this.getPerformanceMetrics(events, gameMode);
     if (metrics.excellenceRate > 75) {
       insights.push({
         type: 'performance',
@@ -196,7 +246,7 @@ export const analyticsUtils = {
     }
     
     // Growth insights
-    const growthRate = this.calculateGrowthRate(events);
+    const growthRate = this.calculateGrowthRate(events, 30, gameMode);
     if (growthRate > 1) {
       insights.push({
         type: 'growth',
@@ -206,12 +256,13 @@ export const analyticsUtils = {
     }
     
     // Opportunity insights
-    const topOpportunity = opportunities
-      .sort((a, b) => (b.current_level * 100 + b.current_xp) - (a.current_level * 100 + a.current_xp))[0];
-    if (topOpportunity && topOpportunity.current_level > 1) {
+    // Copied before sorting — the caller's array is React state elsewhere.
+    const topOpportunity = [...opportunities]
+      .sort((a, b) => oppTotalXp(b, gameMode) - oppTotalXp(a, gameMode))[0];
+    if (topOpportunity && oppLevelsGained(topOpportunity, gameMode) > 0) {
       insights.push({
         type: 'achievement',
-        message: `🏆 ${topOpportunity.title} is your strongest area at level ${topOpportunity.current_level}!`,
+        message: `🏆 ${topOpportunity.title} is your strongest area at level ${oppLevel(topOpportunity, gameMode)}!`,
         priority: 'low'
       });
     }
