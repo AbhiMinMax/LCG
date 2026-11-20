@@ -6,8 +6,9 @@ const MAX_SUGGESTIONS = 8;
 /**
  * Text input (or textarea) with a dropdown of past values.
  *
- * `suggestions` should already be ordered most recent first. As the user
- * types, entries containing the typed text (case-insensitive) are shown.
+ * `suggestions` should already be ordered most recent first. On focus the
+ * most recent entries are shown; as the user types, the list narrows to
+ * entries containing the typed text (case-insensitive).
  * The user can pick one (click, or arrow keys + Enter) or keep typing.
  */
 export default function SuggestInput({
@@ -24,8 +25,8 @@ export default function SuggestInput({
   const listId = useId();
 
   const matches = useMemo(() => {
+    // Empty field: show the most recent entries as soon as the box is focused
     const query = value.trim().toLowerCase();
-    if (!query) return [];
     const seen = new Set();
     const out = [];
     for (const s of suggestions) {
@@ -35,8 +36,8 @@ export default function SuggestInput({
       if (!text || seen.has(key)) continue;
       seen.add(key);
       // Nothing to suggest if it's exactly what's already typed
-      if (key === query) continue;
-      if (key.includes(query)) out.push(text);
+      if (query && key === query) continue;
+      if (!query || key.includes(query)) out.push(text);
       if (out.length >= MAX_SUGGESTIONS) break;
     }
     return out;
