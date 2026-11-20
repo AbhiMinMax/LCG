@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useId } from 'react';
 import './SuggestInput.css';
 
-const MAX_SUGGESTIONS = 8;
+const MAX_SUGGESTIONS = 40;
 
 /**
  * Text input (or textarea) with a dropdown of past values.
