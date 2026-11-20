@@ -763,9 +763,11 @@ function Customize() {
       // Ensure default data is present after import
       await ensureDefaultData();
       
-      // Reload all data
+      // Reload all data, including settings and antagonists restored from the file
       await loadData();
       await loadDataStats();
+      await loadConfig();
+      await loadAntagonists();
       
       // Clear filters
       setSelectedSituationTags([]);
@@ -2408,7 +2410,18 @@ function Customize() {
                 <h4 style={{margin: '0 0 8px 0'}}>✅ Import Successful!</h4>
                 <div style={{fontSize: '0.9rem'}}>
                   Imported: {importResult.situationsCount} situations, {importResult.opportunitiesCount} opportunities, {importResult.linksCount} links, {importResult.eventsCount} events
+                  {importResult.antagonistsCount !== null && importResult.antagonistsCount !== undefined
+                    ? `, ${importResult.antagonistsCount} antagonists`
+                    : ''}
+                  {importResult.configCount !== null && importResult.configCount !== undefined
+                    ? `, ${importResult.configCount} settings`
+                    : ''}
                 </div>
+                {(importResult.antagonistsCount === null || importResult.configCount === null) && (
+                  <div style={{fontSize: '0.85rem', marginTop: '6px', color: 'var(--text-secondary)'}}>
+                    This was an older backup without antagonists or settings, so your current antagonists, traits and settings were kept.
+                  </div>
+                )}
               </div>
             )}
 
@@ -2417,7 +2430,7 @@ function Customize() {
               color: 'var(--text-secondary)',
               lineHeight: '1.4'
             }}>
-              <p><strong>Export:</strong> Download all your data as a JSON file for backup or transfer.</p>
+              <p><strong>Export:</strong> Download all your data as a JSON file for backup or transfer, including antagonists, traits, narratives and settings.</p>
               <p><strong>Import:</strong> Upload a previously exported JSON file. This will replace all current data.</p>
               <p><strong>Restore Defaults:</strong> Ensures essential situations and opportunities are always available. Safe to use - won't delete your custom data.</p>
               <p><strong>⚠️ Warning:</strong> Import will permanently delete all existing data. Make sure to export first if you want to keep your current data.</p>

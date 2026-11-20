@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import SuggestInput from '../components/SuggestInput';
 import { dbHelpers, ANTAGONIST_LEVEL_LABELS } from '../database/db';
 import { ThoughtPair } from '../components/ThoughtPassage';
 import { getPathLevel, getRebirthInfo, PATHS, getRebirthSymbols, getNewRebirthSymbol } from '../utils/pathUtils';
@@ -33,6 +34,7 @@ function AddEvent() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastResult, setLastResult] = useState(null);
   const [pastEventsByChoice, setPastEventsByChoice] = useState({ 1: [], 2: [], 3: [], 4: [] });
+  const [pastEvents, setPastEvents] = useState([]);
   const [expandedChoiceSection, setExpandedChoiceSection] = useState({});
   const [taggedAntagonists, setTaggedAntagonists] = useState([]);
   const [antagonistTaggedSitIds, setAntagonistTaggedSitIds] = useState(new Set());
@@ -86,6 +88,7 @@ function AddEvent() {
           if (grouped[ev.choice_value]) grouped[ev.choice_value].push(ev);
         }
         setPastEventsByChoice(grouped);
+        setPastEvents(allPastEvents);
         setExpandedChoiceSection({});
         setTaggedAntagonists(activeAnts.filter(a => (a.taggedSituationIds || []).includes(sitId)));
 
@@ -102,9 +105,15 @@ function AddEvent() {
       setAffectedOpportunities([]);
       setCurrentSituation(null);
       setPastEventsByChoice({ 1: [], 2: [], 3: [], 4: [] });
+      setPastEvents([]);
       setTaggedAntagonists([]);
     }
   }, [selectedSituation, situations]);
+
+  // Past titles and descriptions for the selected situation, most recent first
+  // (getEventsForSituation already sorts by timestamp descending).
+  const titleSuggestions = useMemo(() => pastEvents.map(e => e.title), [pastEvents]);
+  const descriptionSuggestions = useMemo(() => pastEvents.map(e => e.event_description), [pastEvents]);
 
   const loadSituations = async () => {
     try {
@@ -201,6 +210,7 @@ function AddEvent() {
     setAffectedOpportunities([]);
     setCurrentSituation(null);
     setPastEventsByChoice({ 1: [], 2: [], 3: [], 4: [] });
+    setPastEvents([]);
     setExpandedChoiceSection({});
     setSearchQuery('');
     setFilteredSituations(situations);
@@ -404,12 +414,13 @@ function AddEvent() {
             <label htmlFor="title" className="form-label">
               Event Title
             </label>
-            <input
+            <SuggestInput
               id="title"
               type="text"
               className="form-input"
               value={eventTitle}
-              onChange={(e) => setEventTitle(e.target.value)}
+              onChange={setEventTitle}
+              suggestions={titleSuggestions}
               placeholder="Optional: Give this event a custom title..."
             />
             <div style={{fontSize: '0.85em', color: '#666', marginTop: '4px'}}>
@@ -421,11 +432,13 @@ function AddEvent() {
             <label htmlFor="description" className="form-label">
               Event Description *
             </label>
-            <textarea
+            <SuggestInput
+              multiline
               id="description"
               className="form-input form-textarea"
               value={eventDescription}
-              onChange={(e) => setEventDescription(e.target.value)}
+              onChange={setEventDescription}
+              suggestions={descriptionSuggestions}
               placeholder="Describe what happened in this situation..."
               required
             />

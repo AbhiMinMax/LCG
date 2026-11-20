@@ -1488,24 +1488,30 @@ export const dbHelpers = {
     }
   },
 
-  // Export all data as JSON
+  // Export all data as JSON.
+  // v1.1 adds antagonists and the config table (settings, game profile with
+  // traits and login streak, narratives), so a restore is a full copy.
   async exportAllData() {
     try {
-      const [situations, opportunities, situationOpportunities, events] = await Promise.all([
+      const [situations, opportunities, situationOpportunities, events, antagonists, config] = await Promise.all([
         db.situations.toArray(),
         db.opportunities.toArray(),
         db.situation_opportunities.toArray(),
-        db.events.toArray()
+        db.events.toArray(),
+        db.antagonists.toArray(),
+        db.config.toArray()
       ]);
 
       const exportData = {
-        version: "1.0",
+        version: "1.1",
         exportDate: new Date().toISOString(),
         data: {
           situations,
           opportunities,
           situation_opportunities: situationOpportunities,
-          events
+          events,
+          antagonists,
+          config
         }
       };
 
@@ -1516,7 +1522,10 @@ export const dbHelpers = {
     }
   },
 
-  // Import data from JSON
+  // Import data from JSON.
+  // Runs in one transaction, so a bad file leaves existing data untouched.
+  // Older (v1.0) files have no antagonists or config: those tables are kept
+  // as they are rather than cleared.
   async importAllData(importData) {
     try {
       // Validate import data structure
@@ -1524,38 +1533,58 @@ export const dbHelpers = {
         throw new Error('Invalid import data format');
       }
 
-      const { situations, opportunities, situation_opportunities, events } = importData.data;
+      const { situations, opportunities, situation_opportunities, events, antagonists, config } = importData.data;
+      const hasAntagonists = Array.isArray(antagonists);
+      const hasConfig = Array.isArray(config);
 
-      // Clear existing data
-      await Promise.all([
-        db.events.clear(),
-        db.situation_opportunities.clear(),
-        db.opportunities.clear(),
-        db.situations.clear()
-      ]);
+      // JSON turns Dates into strings; restore them to match freshly created records.
+      const reviveDate = (v) => (v == null ? v : new Date(v));
+      const revivedAntagonists = hasAntagonists
+        ? antagonists.map(a => ({ ...a, createdAt: reviveDate(a.createdAt), defeatedAt: reviveDate(a.defeatedAt) }))
+        : [];
+      // Config values are stored as JSON strings; skip any malformed rows.
+      const validConfig = hasConfig
+        ? config.filter(c => c && typeof c.key === 'string' && typeof c.value === 'string')
+        : [];
 
-      // Import data in correct order to maintain relationships
-      if (situations && situations.length > 0) {
-        await db.situations.bulkAdd(situations);
-      }
-      
-      if (opportunities && opportunities.length > 0) {
-        await db.opportunities.bulkAdd(opportunities);
-      }
-      
-      if (situation_opportunities && situation_opportunities.length > 0) {
-        await db.situation_opportunities.bulkAdd(situation_opportunities);
-      }
-      
-      if (events && events.length > 0) {
-        await db.events.bulkAdd(events);
-      }
+      const tables = [db.situations, db.opportunities, db.situation_opportunities, db.events, db.antagonists, db.config];
+      await db.transaction('rw', tables, async () => {
+        // Clear existing data
+        await db.events.clear();
+        await db.situation_opportunities.clear();
+        await db.opportunities.clear();
+        await db.situations.clear();
+        if (hasAntagonists) await db.antagonists.clear();
+        if (hasConfig) await db.config.clear();
+
+        // Import data in correct order to maintain relationships
+        if (situations && situations.length > 0) {
+          await db.situations.bulkAdd(situations);
+        }
+        if (opportunities && opportunities.length > 0) {
+          await db.opportunities.bulkAdd(opportunities);
+        }
+        if (situation_opportunities && situation_opportunities.length > 0) {
+          await db.situation_opportunities.bulkAdd(situation_opportunities);
+        }
+        if (events && events.length > 0) {
+          await db.events.bulkAdd(events);
+        }
+        if (revivedAntagonists.length > 0) {
+          await db.antagonists.bulkAdd(revivedAntagonists);
+        }
+        if (validConfig.length > 0) {
+          await db.config.bulkAdd(validConfig);
+        }
+      });
 
       return {
         situationsCount: situations?.length || 0,
         opportunitiesCount: opportunities?.length || 0,
         linksCount: situation_opportunities?.length || 0,
-        eventsCount: events?.length || 0
+        eventsCount: events?.length || 0,
+        antagonistsCount: hasAntagonists ? revivedAntagonists.length : null,
+        configCount: hasConfig ? validConfig.length : null
       };
     } catch (error) {
       console.error('Error importing data:', error);

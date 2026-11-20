@@ -1,0 +1,48 @@
+.suggest-input {
+  position: relative;
+}
+
+.suggest-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-hover);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px var(--shadow);
+}
+
+.suggest-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Descriptions can be long: show up to 3 lines */
+.suggest-item.multiline {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.suggest-item + .suggest-item {
+  border-top: 1px solid var(--border-color);
+}
+
+.suggest-item.active,
+.suggest-item:hover {
+  background: var(--bg-tertiary);
+}
