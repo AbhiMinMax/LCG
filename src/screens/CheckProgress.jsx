@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { dbHelpers, db, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL_LABELS } from '../database/db';
+import { dbHelpers, db, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL_LABELS, getImpactFactor, formatImpactFactor } from '../database/db';
 import { PATHS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils/pathUtils';
 import { TRAITS, computeUnlockedTraitIds } from '../utils/traitUtils';
 import { consumePendingEvent, storeBossSnapshot, getPrevBossSnapshot } from '../utils/animationState';
@@ -647,7 +647,7 @@ function AntagonistCard({ antagonist, taggedTitles = [], lastHitDaysAgo, recentC
   const [fading, setFading] = useState(false);
 
   // Level crossfade
-  const prevLabel = recentChange?.levelChanged ? ANTAGONIST_LEVEL_LABELS[recentChange.oldLevel] : null;
+  const prevLabel = recentChange?.levelChanged ? ANTAGONIST_LEVEL_LABELS[recentChange.oldLevel ?? recentChange.levelAtTime] : null;
   const [displayLabel, setDisplayLabel] = useState(prevLabel || label);
   const [labelAnimClass, setLabelAnimClass] = useState(prevLabel ? 'label-fade-out' : '');
 
@@ -950,8 +950,8 @@ function GameProgress() {
           </button>
           {sectionsExpanded.antagonists && antagonists.map(ant => {
             const taggedTitles = (ant.taggedSituationIds || [])
-              .map(id => antagonistSituations[id])
-              .filter(Boolean);
+              .filter(id => antagonistSituations[id])
+              .map(id => [antagonistSituations[id], formatImpactFactor(getImpactFactor(ant, id))].filter(Boolean).join(' '));
             return (
               <AntagonistCard
                 key={ant.id}

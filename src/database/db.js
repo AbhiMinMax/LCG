@@ -269,6 +269,22 @@ export class LifeProgressDB extends Dexie {
 export const db = new LifeProgressDB();
 
 // Antagonist system constants
+// Impact dimmer per tagged situation: how strongly a situation hits an
+// antagonist (direct = 1, weaker/indirect links lower). Stored on the
+// antagonist as situationImpact: { [situationId]: factor }. A missing entry
+// means 1, so links made before this feature behave as before.
+export const IMPACT_FACTORS = [1, 0.75, 0.5, 0.25];
+
+export function getImpactFactor(antagonist, situationId) {
+  const f = antagonist?.situationImpact?.[situationId];
+  return IMPACT_FACTORS.includes(f) ? f : 1;
+}
+
+// Short label for display, e.g. "×0.5". Empty for full impact.
+export function formatImpactFactor(factor) {
+  return factor === 1 ? '' : `×${factor}`;
+}
+
 export const ANTAGONIST_HP_POOLS = {
   10: 200, 9: 250, 8: 300, 7: 350, 6: 400,
   5: 450,  4: 500, 3: 550, 2: 600, 1: 650,
@@ -1087,12 +1103,16 @@ export const dbHelpers = {
         a => Array.isArray(a.taggedSituationIds) && a.taggedSituationIds.includes(situationId)
       );
       for (const antagonist of tagged) {
-        const result = await this.applyAntagonistDamage(antagonist.id, gameXpChange);
+        // The situation's impact dimmer scales both damage and healing
+        const impactFactor = getImpactFactor(antagonist, situationId);
+        const antagonistXp = gameXpChange * impactFactor;
+        const result = await this.applyAntagonistDamage(antagonist.id, antagonistXp);
         if (result) {
           antagonistImpacts.push({
             antagonistId: antagonist.id,
             antagonistName: antagonist.name,
-            hpDelta: -gameXpChange, // positive XP = negative HP change
+            hpDelta: -antagonistXp, // positive XP = negative HP change
+            impactFactor,
             levelAtTime: result.oldLevel,
             newLevel: result.newLevel,
             levelChanged: result.levelChanged,
@@ -1614,7 +1634,7 @@ export const dbHelpers = {
     }
   },
 
-  async createAntagonist(name, description, startingLevel, taggedSituationIds) {
+  async createAntagonist(name, description, startingLevel, taggedSituationIds, situationImpact = {}) {
     try {
       const level = Math.max(1, Math.min(10, parseInt(startingLevel) || 5));
       const antagonist = {
@@ -1624,6 +1644,7 @@ export const dbHelpers = {
         currentLevel: level,
         currentHP: ANTAGONIST_HP_POOLS[level],
         taggedSituationIds: Array.isArray(taggedSituationIds) ? taggedSituationIds : [],
+        situationImpact: situationImpact || {},
         status: 'active',
         totalDamageDealt: 0,
         createdAt: new Date(),

@@ -14,7 +14,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Bar, Line, Pie, Doughnut, Radar, PolarArea } from 'react-chartjs-2';
-import { dbHelpers, db } from '../database/db';
+import { dbHelpers, db, getImpactFactor, formatImpactFactor } from '../database/db';
 import { useTheme } from '../hooks/useTheme';
 import {
   analyticsUtils,
@@ -198,7 +198,7 @@ function GameStatsSection({ rawEvents, rawOpps, rawSits, profile, antagonists = 
           .filter(imp => imp.antagonistId === ant.id && imp.hpDelta < 0)
           .reduce((s, imp) => s + Math.abs(imp.hpDelta), 0);
         if (!result[sitId]) result[sitId] = [];
-        result[sitId].push({ ant, damage });
+        result[sitId].push({ ant, damage, impactFactor: getImpactFactor(ant, sitId) });
       }
     }
     return result;
@@ -294,10 +294,11 @@ function GameStatsSection({ rawEvents, rawOpps, rawSits, profile, antagonists = 
                 {currentFailRun > 0 && <span style={{ color: '#c0392b', marginLeft: 4 }}>↓ {currentFailRun} run</span>}
               </div>
               {/* Antagonist info for this situation */}
-              {(sitAntagonistDamage[sit.id] || []).map(({ ant, damage }) => (
+              {(sitAntagonistDamage[sit.id] || []).map(({ ant, damage, impactFactor }) => (
                 <div key={ant.id} style={{ marginTop: 6, fontSize: '0.72rem', color: '#8b2020', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span>⚔ {ant.name}</span>
                   <span style={{ color: 'var(--text-secondary)' }}>Lv.{ant.currentLevel}</span>
+                  {impactFactor !== 1 && <span style={{ color: 'var(--text-secondary)' }}>impact {formatImpactFactor(impactFactor)}</span>}
                   {damage > 0 && <span style={{ color: '#27ae60' }}>{parseFloat(damage.toFixed(2))} damage through this situation</span>}
                 </div>
               ))}

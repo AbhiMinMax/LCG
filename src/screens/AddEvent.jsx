@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import SuggestInput from '../components/SuggestInput';
-import { dbHelpers, ANTAGONIST_LEVEL_LABELS } from '../database/db';
+import { dbHelpers, ANTAGONIST_LEVEL_LABELS, getImpactFactor, formatImpactFactor } from '../database/db';
 import { ThoughtPair } from '../components/ThoughtPassage';
 import { getPathLevel, getRebirthInfo, PATHS, getRebirthSymbols, getNewRebirthSymbol } from '../utils/pathUtils';
 import { setPendingEvent } from '../utils/animationState';
@@ -500,14 +500,16 @@ function AddEvent() {
             {gameModeEnabled && taggedAntagonists.length > 0 && (
               <div style={{ marginTop: 14, padding: '10px 12px', background: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 8 }}>
                 {taggedAntagonists.map(ant => {
+                  // Mirrors addEvent: rounded difficulty, real doubling, then the impact dimmer
+                  const impactFactor = getImpactFactor(ant, currentSituation?.id);
                   let previewXp = 0;
                   if (selectedChoice) {
                     let base = GAME_BASE_XP[parseInt(selectedChoice)] ?? 0;
                     if (dynamicXpEnabled && currentSituation?.challenging_level) {
-                      base = base * 2 ** (currentSituation.challenging_level - 3);
+                      base = base * 2 ** ((Math.round(currentSituation.challenging_level) || 3) - 3);
                     }
                     if (base > 0 && !currentSituation?.isMeta) base *= 2;
-                    previewXp = base;
+                    previewXp = parseFloat((base * impactFactor).toFixed(2));
                   }
                   const isDamage = previewXp > 0;
                   const isRecovery = previewXp < 0;
@@ -516,6 +518,9 @@ function AddEvent() {
                     <div key={ant.id} style={{ marginBottom: 6, fontSize: '0.82rem' }}>
                       <div style={{ fontWeight: 600, color: '#8b2020' }}>
                         ⚔ {ant.name} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>Lv.{ant.currentLevel} — {ANTAGONIST_LEVEL_LABELS[ant.currentLevel]}</span>
+                        {impactFactor !== 1 && (
+                          <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 6 }}>· impact {formatImpactFactor(impactFactor)}</span>
+                        )}
                       </div>
                       {selectedChoice ? (
                         <div style={{ marginTop: 2, color: isDamage ? '#27ae60' : isRecovery ? '#c0392b' : 'var(--text-secondary)', fontSize: '0.78rem' }}>

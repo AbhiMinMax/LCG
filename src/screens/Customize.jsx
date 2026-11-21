@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { db, dbHelpers, ensureDefaultData, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL_LABELS } from '../database/db';
+import { db, dbHelpers, ensureDefaultData, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL_LABELS, IMPACT_FACTORS, getImpactFactor, formatImpactFactor } from '../database/db';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import { ThoughtPair } from '../components/ThoughtPassage';
@@ -73,6 +73,7 @@ function Customize() {
     description: '',
     startingLevel: 5,
     taggedSituationIds: [],
+    situationImpact: {},
   });
   const [antagonistSituationSearch, setAntagonistSituationSearch] = useState('');
   const [deleteConfirmAntagonistId, setDeleteConfirmAntagonistId] = useState(null);
@@ -578,7 +579,7 @@ function Customize() {
   // ─── Antagonist handlers ───────────────────────────────────────────────────
 
   const resetAntagonistForm = () => {
-    setAntagonistForm({ name: '', description: '', startingLevel: 5, taggedSituationIds: [] });
+    setAntagonistForm({ name: '', description: '', startingLevel: 5, taggedSituationIds: [], situationImpact: {} });
     setEditingAntagonist(null);
     setShowAntagonistForm(false);
     setAntagonistSituationSearch('');
@@ -590,19 +591,27 @@ function Customize() {
       alert('Name is required.');
       return;
     }
+    // Keep only dimmers for situations that are still tagged and not at full impact
+    const situationImpact = {};
+    for (const sitId of antagonistForm.taggedSituationIds) {
+      const f = antagonistForm.situationImpact?.[sitId];
+      if (IMPACT_FACTORS.includes(f) && f !== 1) situationImpact[sitId] = f;
+    }
     try {
       if (editingAntagonist) {
         await dbHelpers.updateAntagonist(editingAntagonist.id, {
           name: antagonistForm.name.trim(),
           description: antagonistForm.description.trim(),
           taggedSituationIds: antagonistForm.taggedSituationIds,
+          situationImpact,
         });
       } else {
         await dbHelpers.createAntagonist(
           antagonistForm.name,
           antagonistForm.description,
           antagonistForm.startingLevel,
-          antagonistForm.taggedSituationIds
+          antagonistForm.taggedSituationIds,
+          situationImpact
         );
       }
       resetAntagonistForm();
@@ -620,6 +629,7 @@ function Customize() {
       description: antagonist.description || '',
       startingLevel: antagonist.startingLevel,
       taggedSituationIds: antagonist.taggedSituationIds || [],
+      situationImpact: { ...(antagonist.situationImpact || {}) },
     });
     setShowAntagonistForm(true);
   };
@@ -645,6 +655,13 @@ function Customize() {
       taggedSituationIds: prev.taggedSituationIds.includes(sitId)
         ? prev.taggedSituationIds.filter(id => id !== sitId)
         : [...prev.taggedSituationIds, sitId],
+    }));
+  };
+
+  const setAntagonistSituationImpact = (sitId, factor) => {
+    setAntagonistForm(prev => ({
+      ...prev,
+      situationImpact: { ...(prev.situationImpact || {}), [sitId]: factor },
     }));
   };
 
@@ -1986,6 +2003,20 @@ function Customize() {
                           />
                           <span style={{ fontSize: '0.9rem' }}>{s.title}</span>
                           {s.isMeta && <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Meta</span>}
+                          {antagonistForm.taggedSituationIds.includes(s.id) && (
+                            <select
+                              aria-label={`Impact of ${s.title}`}
+                              title="Impact: how strongly this situation hits the antagonist"
+                              value={getImpactFactor(antagonistForm, s.id)}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => setAntagonistSituationImpact(s.id, parseFloat(e.target.value))}
+                              style={{ marginLeft: 'auto', padding: '2px 4px', fontSize: '0.8rem', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                            >
+                              {IMPACT_FACTORS.map(f => (
+                                <option key={f} value={f}>×{f}</option>
+                              ))}
+                            </select>
+                          )}
                         </label>
                       ))
                     }
@@ -1995,7 +2026,7 @@ function Customize() {
                   </div>
                   {antagonistForm.taggedSituationIds.length > 0 && (
                     <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: 6, marginBottom: 0 }}>
-                      {antagonistForm.taggedSituationIds.length} situation{antagonistForm.taggedSituationIds.length !== 1 ? 's' : ''} tagged
+                      {antagonistForm.taggedSituationIds.length} situation{antagonistForm.taggedSituationIds.length !== 1 ? 's' : ''} tagged · impact scales both damage and healing (applies to future events)
                     </p>
                   )}
                 </div>
@@ -2022,7 +2053,9 @@ function Customize() {
             const hpPct = Math.min(100, Math.max(0, (ant.currentHP / maxHP) * 100));
             const createdDays = Math.floor((Date.now() - new Date(ant.createdAt).getTime()) / 86400000);
             const confirming = deleteConfirmAntagonistId === ant.id;
-            const taggedTitles = allSituations.filter(s => (ant.taggedSituationIds || []).includes(s.id)).map(s => s.title);
+            const taggedTitles = allSituations
+              .filter(s => (ant.taggedSituationIds || []).includes(s.id))
+              .map(s => [s.title, formatImpactFactor(getImpactFactor(ant, s.id))].filter(Boolean).join(' '));
 
             return (
               <div key={ant.id} className="card item-card" style={{ borderLeft: '3px solid #8b2020' }}>
@@ -2034,7 +2067,7 @@ function Customize() {
                         {ANTAGONIST_LEVEL_LABELS[ant.currentLevel]}  Lv.{ant.currentLevel}
                       </span>
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        {ant.totalDamageDealt} dmg dealt · {createdDays}d fighting
+                        {parseFloat((ant.totalDamageDealt || 0).toFixed(2))} dmg dealt · {createdDays}d fighting
                       </span>
                     </div>
                   </div>
@@ -2119,7 +2152,7 @@ function Customize() {
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                           <span>Started Lv.{ant.startingLevel} ({ANTAGONIST_LEVEL_LABELS[ant.startingLevel]})</span>
                           {fightDays !== null && <span>· {fightDays}d fight</span>}
-                          <span>· {ant.totalDamageDealt} total damage</span>
+                          <span>· {parseFloat((ant.totalDamageDealt || 0).toFixed(2))} total damage</span>
                           {ant.defeatedAt && (
                             <span>· Defeated {new Date(ant.defeatedAt).toLocaleDateString()}</span>
                           )}

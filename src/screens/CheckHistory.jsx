@@ -322,6 +322,9 @@ function CheckHistory() {
                         {impact.hpDelta < 0
                           ? `${parseFloat(Math.abs(impact.hpDelta).toFixed(2))} damage dealt`
                           : `${parseFloat(impact.hpDelta.toFixed(2))} HP recovered`}
+                        {impact.impactFactor !== undefined && impact.impactFactor !== 1 && (
+                          <span style={{ marginLeft: 6, color: 'var(--text-secondary)' }}>(impact ×{impact.impactFactor})</span>
+                        )}
                         {impact.levelChanged && (
                           <span style={{ marginLeft: 8, color: impact.hpDelta < 0 ? '#27ae60' : '#c0392b', fontWeight: 600 }}>
                             → Lv.{impact.newLevel} ({ANTAGONIST_LEVEL_LABELS[impact.newLevel] || ''})
