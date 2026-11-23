@@ -2,6 +2,7 @@
 import Dexie from 'dexie';
 import { XP_PER_LEVEL, REBIRTH_XP } from '../utils/pathUtils';
 import { IMPACT_FACTORS, normalizeImpact, round2, eventOppFactor } from '../utils/impactUtils';
+import { normalizeThoughtPairs, pairsFromLegacy, newPairId, referencedPairIds } from '../utils/thoughtUtils';
 export { IMPACT_FACTORS };
 
 // FROZEN — the path level curve as it stood before the flat-XP change.
@@ -264,6 +265,42 @@ export class LifeProgressDB extends Dexie {
         console.log(`[db v10 drop-path-lock] removed the flag from ${cleared} opportunities`);
       });
     });
+
+    // Version 11: Linked thoughts. Every thought pair gets a stable id,
+    // `archived: false` and a created_at (from its list position, so the
+    // original order is kept). Legacy back_thoughts/forth_thoughts are folded
+    // in and removed. Any legacy free-text pick that matches a pair's text is
+    // converted to that pair's id.
+    this.version(11).stores({
+      situations: '++id, title, description, tags, isMeta, challenging_level, created_at, updated_at',
+      opportunities: '++id, title, description, tags, current_xp, game_xp, path, archived, current_level, created_at, updated_at',
+      situation_opportunities: '[situation_id+opportunity_id], situation_id, opportunity_id',
+      events: '++id, title, situation_id, event_description, choice_value, xp_change, game_xp_change, selected_back_thought, selected_forth_thought, timestamp, affected_opportunities',
+      config: '++id, key, value',
+      antagonists: '++id, name, status, createdAt'
+    }).upgrade(async tx => {
+      const pairsBySituation = {};
+      await tx.situations.toCollection().modify(sit => {
+        const raw = Array.isArray(sit.thought_pairs) ? sit.thought_pairs : pairsFromLegacy(sit);
+        sit.thought_pairs = normalizeThoughtPairs(raw, sit.created_at || new Date(0));
+        delete sit.back_thoughts;
+        delete sit.forth_thoughts;
+        pairsBySituation[sit.id] = sit.thought_pairs;
+      });
+      let converted = 0;
+      await tx.events.toCollection().modify(ev => {
+        const pairs = pairsBySituation[ev.situation_id] || [];
+        const toId = (val, side) => {
+          if (!val || pairs.some(p => p.id === val)) return val || null;
+          const match = pairs.find(p => p[side] === val);
+          if (match) converted++;
+          return match ? match.id : val;
+        };
+        ev.selected_back_thought = toId(ev.selected_back_thought, 'back');
+        ev.selected_forth_thought = toId(ev.selected_forth_thought, 'forth');
+      });
+      console.log(`[db v11 linked-thoughts] ids added to ${Object.keys(pairsBySituation).length} situations; ${converted} legacy picks converted`);
+    });
   }
 }
 
@@ -315,14 +352,16 @@ export const dbHelpers = {
     // If no data exists, create full sample data
     if (situationCount === 0 && opportunityCount === 0) {
       await this.createInitialSampleData();
-      return;
+    } else {
+      // Ensure we have at least basic default situations
+      await this.ensureDefaultSituations();
+
+      // Ensure we have at least basic default opportunities
+      await this.ensureDefaultOpportunities();
     }
-    
-    // Ensure we have at least basic default situations
-    await this.ensureDefaultSituations();
-    
-    // Ensure we have at least basic default opportunities
-    await this.ensureDefaultOpportunities();
+
+    // Seeded pairs are plain {back, forth}; give them ids
+    await this.ensureThoughtPairIds();
   },
 
   // Fix legacy situations that don't have new fields
@@ -1313,10 +1352,9 @@ export const dbHelpers = {
       tags: Array.isArray(tags) ? tags.filter(tag => tag.trim()) : [],
       isMeta: !!isMeta,
       challenging_level: Math.max(1, Math.min(5, parseInt(challengingLevel) || 3)),
-      thought_pairs: Array.isArray(thoughtPairs)
-        ? thoughtPairs.filter(p => (p.back && p.back.trim()) || (p.forth && p.forth.trim()))
-            .map(p => ({ back: p.back?.trim() || null, forth: p.forth?.trim() || null }))
-        : [],
+      thought_pairs: normalizeThoughtPairs(
+        (Array.isArray(thoughtPairs) ? thoughtPairs : []).map(p => ({ ...p, created_at: p.created_at || new Date().toISOString() }))
+      ),
       created_at: new Date(),
       updated_at: new Date()
     };
@@ -1339,10 +1377,7 @@ export const dbHelpers = {
     }
 
     if (thoughtPairs !== null) {
-      updates.thought_pairs = Array.isArray(thoughtPairs)
-        ? thoughtPairs.filter(p => (p.back && p.back.trim()) || (p.forth && p.forth.trim()))
-            .map(p => ({ back: p.back?.trim() || null, forth: p.forth?.trim() || null }))
-        : [];
+      updates.thought_pairs = await this.reconcileThoughtPairs(id, thoughtPairs);
     }
 
     if (isMeta !== null) {
@@ -1351,6 +1386,75 @@ export const dbHelpers = {
 
     await db.situations.update(id, updates);
     return await db.situations.get(id);
+  },
+
+  // Saved pair list for a situation edit: ids kept, new pairs get ids and a
+  // created_at, and any previous pair that an event references but that is
+  // missing (deleted or emptied) is kept as archived instead of removed.
+  async reconcileThoughtPairs(situationId, thoughtPairs) {
+    const situation = await db.situations.get(situationId);
+    const previous = situation?.thought_pairs || [];
+    const nowIso = new Date().toISOString();
+    const next = normalizeThoughtPairs(
+      (Array.isArray(thoughtPairs) ? thoughtPairs : []).map(p => ({ ...p, created_at: p.created_at || nowIso }))
+    );
+    const keptIds = new Set(next.map(p => p.id));
+    const events = await db.events.where('situation_id').equals(situationId).toArray();
+    const referenced = referencedPairIds(events);
+    for (const prev of previous) {
+      if (prev.id && !keptIds.has(prev.id) && referenced.has(prev.id)) {
+        next.push({ ...prev, archived: true });
+      }
+    }
+    return next;
+  },
+
+  // Create a pair from the logging screen ("+ new"): one side only.
+  async addThoughtPair(situationId, side, text) {
+    const situation = await db.situations.get(situationId);
+    const t = typeof text === 'string' ? text.trim() : '';
+    if (!situation || !t) return null;
+    const pair = {
+      id: newPairId(),
+      back: side === 'back' ? t : null,
+      forth: side === 'forth' ? t : null,
+      archived: false,
+      created_at: new Date().toISOString(),
+    };
+    const thought_pairs = [...(situation.thought_pairs || []), pair];
+    await db.situations.update(situationId, { thought_pairs, updated_at: new Date() });
+    return pair;
+  },
+
+  // Restore an archived pair so it returns to logging with its history intact.
+  async restoreThoughtPair(situationId, pairId) {
+    const situation = await db.situations.get(situationId);
+    if (!situation) return null;
+    const thought_pairs = (situation.thought_pairs || []).map(p => (p.id === pairId ? { ...p, archived: false } : p));
+    await db.situations.update(situationId, { thought_pairs, updated_at: new Date() });
+    return thought_pairs;
+  },
+
+  // Clear (never change) one thought pick on a logged event.
+  async clearThoughtPick(eventId, side) {
+    const field = side === 'back' ? 'selected_back_thought' : 'selected_forth_thought';
+    await db.events.update(eventId, { [field]: null });
+  },
+
+  // Give ids/created_at to any pairs that lack them (seeded defaults,
+  // imported older backups). Safe to run repeatedly.
+  async ensureThoughtPairIds() {
+    const situations = await db.situations.toArray();
+    const updates = [];
+    for (const sit of situations) {
+      const raw = Array.isArray(sit.thought_pairs) ? sit.thought_pairs : pairsFromLegacy(sit);
+      const needs = !Array.isArray(sit.thought_pairs) || raw.some(p => !p.id || p.archived === undefined || !p.created_at);
+      if (needs) {
+        updates.push({ key: sit.id, changes: { thought_pairs: normalizeThoughtPairs(raw, sit.created_at || new Date(0)) } });
+      }
+    }
+    if (updates.length > 0) await db.situations.bulkUpdate(updates);
+    return updates.length;
   },
 
   // Create a new opportunity
@@ -1651,6 +1755,8 @@ export const dbHelpers = {
           await db.config.bulkAdd(validConfig);
         }
       });
+      // Backups from before linked thoughts have pairs without ids
+      await this.ensureThoughtPairIds();
 
       return {
         situationsCount: situations?.length || 0,

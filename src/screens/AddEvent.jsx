@@ -7,6 +7,8 @@ import { setPendingEvent } from '../utils/animationState';
 import { round2 } from '../utils/impactUtils';
 import { DEFAULT_DAY_START_HOUR } from '../utils/dayUtils';
 import AfterthoughtLine from '../components/AfterthoughtLine';
+import { ThoughtPickRows, ThoughtsView } from '../components/ThoughtPicks';
+import { buildThoughtStats } from '../utils/thoughtUtils';
 
 const CHOICE_OPTIONS = [
   // Must match calculateXpChange in db.js
@@ -31,6 +33,8 @@ function AddEvent() {
   const [selectedChoice, setSelectedChoice] = useState('');
   const [affectedOpportunities, setAffectedOpportunities] = useState([]);
   const [currentSituation, setCurrentSituation] = useState(null);
+  const [backPick, setBackPick] = useState(null);   // pair id
+  const [forthPick, setForthPick] = useState(null); // pair id
   const [dynamicXpEnabled, setDynamicXpEnabled] = useState(false);
   const [dayStartHour, setDayStartHour] = useState(DEFAULT_DAY_START_HOUR);
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
@@ -170,7 +174,9 @@ function AddEvent() {
         parseInt(selectedSituation),
         eventDescription.trim(),
         parseInt(selectedChoice),
-        eventTitle.trim() || null
+        eventTitle.trim() || null,
+        backPick,
+        forthPick
       );
 
       setLastResult(result);
@@ -197,6 +203,8 @@ function AddEvent() {
       setSelectedChoice('');
       setAffectedOpportunities([]);
       setCurrentSituation(null);
+      setBackPick(null);
+      setForthPick(null);
 
       // Hide success message after 3 seconds
       setTimeout(() => setShowSuccess(false), 3000);
@@ -209,6 +217,31 @@ function AddEvent() {
     }
   };
 
+  // Picks belong to one situation: clear them only when the situation changes
+  // (not when the situation list updates after "+ new").
+  useEffect(() => {
+    setBackPick(null);
+    setForthPick(null);
+  }, [selectedSituation]);
+
+  // Linked thoughts: stats for the chosen situation (spec §2)
+  const thoughtStats = useMemo(
+    () => buildThoughtStats(currentSituation?.thought_pairs || [], pastEvents),
+    [currentSituation, pastEvents]
+  );
+
+  // "+ new" in the picker: create the pair on the situation, return its id
+  const createThoughtPair = async (side, text) => {
+    const sitId = parseInt(selectedSituation);
+    const pair = await dbHelpers.addThoughtPair(sitId, side, text);
+    if (!pair) return null;
+    const addPair = s => (s.id === sitId ? { ...s, thought_pairs: [...(s.thought_pairs || []), pair] } : s);
+    setSituations(prev => prev.map(addPair));
+    setFilteredSituations(prev => prev.map(addPair));
+    setCurrentSituation(prev => (prev ? addPair(prev) : prev));
+    return pair.id;
+  };
+
   const handleCancel = () => {
     setSelectedSituation('');
     setEventTitle('');
@@ -216,6 +249,8 @@ function AddEvent() {
     setSelectedChoice('');
     setAffectedOpportunities([]);
     setCurrentSituation(null);
+    setBackPick(null);
+    setForthPick(null);
     setPastEventsByChoice({ 1: [], 2: [], 3: [], 4: [] });
     setPastEvents([]);
     setExpandedChoiceSection({});
@@ -437,6 +472,9 @@ function AddEvent() {
             />
           )}
 
+          {/* Thoughts stats for this situation (spec §2.3) */}
+          {selectedSituation && currentSituation && <ThoughtsView stats={thoughtStats} />}
+
           <div className="form-group">
             <label htmlFor="title" className="form-label">
               Event Title
@@ -470,6 +508,18 @@ function AddEvent() {
               required
             />
           </div>
+
+          {/* Linked thoughts: optional Back and Forth picks (spec §2.2) */}
+          {selectedSituation && currentSituation && (
+            <ThoughtPickRows
+              stats={thoughtStats}
+              backId={backPick}
+              forthId={forthPick}
+              onChangeBack={setBackPick}
+              onChangeForth={setForthPick}
+              onCreate={createThoughtPair}
+            />
+          )}
 
           <div className="form-group">
             <label className="form-label">Your Response Choice *</label>
@@ -563,12 +613,12 @@ function AddEvent() {
             )}
           </div>
 
-          {currentSituation?.thought_pairs?.length > 0 && (
+          {currentSituation?.thought_pairs?.some(p => !p.archived) && (
             <div className="form-group">
               <label className="form-label">💭 Common Thoughts in This Situation</label>
-              {currentSituation.thought_pairs.map((pair, i) => (
+              {currentSituation.thought_pairs.filter(p => !p.archived).map((pair, i) => (
                 <ThoughtPair
-                  key={i}
+                  key={pair.id || i}
                   backThought={pair.back}
                   forthThought={pair.forth}
                 />

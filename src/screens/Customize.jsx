@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, dbHelpers, ensureDefaultData, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL_LABELS, IMPACT_FACTORS, getImpactFactor, formatImpactFactor } from '../database/db';
+import { referencedPairIds } from '../utils/thoughtUtils';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import { ThoughtPair } from '../components/ThoughtPassage';
@@ -51,6 +52,7 @@ function Customize() {
   const [masteryStreakMinDisplay, setMasteryStreakMinDisplay] = useState(3);
   const [opportunityBossWindow, setOpportunityBossWindow] = useState(20);
   const [dayStartHour, setDayStartHour] = useState(4);
+  const [referencedThoughtIds, setReferencedThoughtIds] = useState(new Set()); // pair ids picked by events
   
   // Archived opportunities (separate from active list)
   const [archivedOpportunities, setArchivedOpportunities] = useState([]);
@@ -252,7 +254,7 @@ function Customize() {
 
       if (filterSituationThoughts) {
         filtered = filtered.filter(situation =>
-          situation.thought_pairs && situation.thought_pairs.length > 0
+          situation.thought_pairs && situation.thought_pairs.some(p => !p.archived)
         );
       }
 
@@ -342,6 +344,7 @@ function Customize() {
         dbHelpers.getEventCountsPerOpportunity(),
         db.situation_opportunities.toArray(),
       ]);
+      setReferencedThoughtIds(referencedPairIds(await db.events.toArray()));
       setAllSituations(situationsData);
       setSituations(situationsData);
       setAllOpportunities(opportunitiesData);
@@ -1132,6 +1135,7 @@ function Customize() {
                   </div>
 
                   {situationForm.thoughtPairs.map((pair, index) => {
+                    if (pair.archived) return null; // shown in the Archived list below
                     const isPair = pair.back !== null && pair.forth !== null;
                     const isSoloBack = pair.back !== null && pair.forth === null;
                     const isSoloForth = pair.back === null && pair.forth !== null;
@@ -1187,8 +1191,12 @@ function Customize() {
                             type="button"
                             onClick={() => setSituationForm({
                               ...situationForm,
-                              thoughtPairs: situationForm.thoughtPairs.filter((_, i) => i !== index)
+                              // A pair that past events picked is archived, not removed
+                              thoughtPairs: pair.id && referencedThoughtIds.has(pair.id)
+                                ? situationForm.thoughtPairs.map((p, i) => (i === index ? { ...p, archived: true } : p))
+                                : situationForm.thoughtPairs.filter((_, i) => i !== index)
                             })}
+                            title={pair.id && referencedThoughtIds.has(pair.id) ? 'Archive (used by past events)' : 'Delete'}
                             style={{ padding: '2px 7px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
                           >
                             ✕
@@ -1237,6 +1245,37 @@ function Customize() {
                       </div>
                     );
                   })}
+
+                  {situationForm.thoughtPairs.some(p => p.archived) && (
+                    <div className="archived-pairs" style={{ marginBottom: '12px', padding: '8px 10px', border: '1px dashed var(--border-color)', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Archived (kept for past events)</div>
+                      {situationForm.thoughtPairs.map((pair, index) => pair.archived && (
+                        <div key={pair.id || index} className="archived-pair" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '4px 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          <span style={{ flex: 1 }}>
+                            {pair.back && <span>😈 {pair.back}</span>}
+                            {pair.back && pair.forth && <span> → </span>}
+                            {pair.forth && <span>😇 {pair.forth}</span>}
+                            <span> (archived)</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setSituationForm(prev => ({
+                                ...prev,
+                                thoughtPairs: prev.thoughtPairs.map((p, i) => (i === index ? { ...p, archived: false } : p)),
+                              }));
+                              if (editingSituation && pair.id) {
+                                await dbHelpers.restoreThoughtPair(editingSituation.id, pair.id);
+                              }
+                            }}
+                            style={{ padding: '2px 8px', fontSize: '0.78rem', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer' }}
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
                     <button
@@ -1413,14 +1452,14 @@ function Customize() {
                   </div>
                 )}
                 
-                {situation.thought_pairs?.length > 0 && (
+                {situation.thought_pairs?.some(p => !p.archived) && (
                   <div style={{ marginBottom: '12px' }}>
                     <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted, #888)', marginBottom: '6px' }}>
                       💭 Thoughts
                     </div>
-                    {situation.thought_pairs.map((pair, i) => (
+                    {situation.thought_pairs.filter(p => !p.archived).map((pair, i) => (
                       <ThoughtPair
-                        key={i}
+                        key={pair.id || i}
                         backThought={pair.back}
                         forthThought={pair.forth}
                         defaultExpanded={false}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db, dbHelpers, ANTAGONIST_LEVEL_LABELS } from '../database/db';
 import { ThoughtPassage } from '../components/ThoughtPassage';
 import { formatAddedLater, DEFAULT_DAY_START_HOUR } from '../utils/dayUtils';
+import { pickText } from '../utils/thoughtUtils';
 import './ProgressStyles.css';
 
 const fmtXp = (v) => parseFloat((v || 0).toFixed(2));
@@ -34,6 +35,7 @@ function CheckHistory() {
   const [dayStartHour, setDayStartHour] = useState(DEFAULT_DAY_START_HOUR);
   const [editingAfterthoughtId, setEditingAfterthoughtId] = useState(null);
   const [afterthoughtDraft, setAfterthoughtDraft] = useState('');
+  const [clearConfirm, setClearConfirm] = useState(null); // { eventId, side }
 
   useEffect(() => {
     loadEvents();
@@ -101,6 +103,50 @@ function CheckHistory() {
       console.error('Error saving afterthought:', error);
       alert('Error saving afterthought. Please try again.');
     }
+  };
+
+  // Clear (never change) a thought pick on a logged event (spec §2.5)
+  const clearPick = async (eventId, side) => {
+    try {
+      await dbHelpers.clearThoughtPick(eventId, side);
+      const field = side === 'back' ? 'selected_back_thought' : 'selected_forth_thought';
+      setEvents(prev => prev.map(e => (e.id === eventId ? { ...e, [field]: null } : e)));
+      setClearConfirm(null);
+    } catch (error) {
+      console.error('Error clearing thought pick:', error);
+      alert('Error clearing the pick. Please try again.');
+    }
+  };
+
+  const renderPick = (event, side) => {
+    const field = side === 'back' ? 'selected_back_thought' : 'selected_forth_thought';
+    const pick = pickText(event.situation, event[field], side);
+    if (!pick) return null;
+    const confirming = clearConfirm?.eventId === event.id && clearConfirm?.side === side;
+    return (
+      <div className={`thought-pick thought-pick-${side}`} style={{ marginBottom: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+          <div style={{ fontSize: '0.78rem', color: side === 'back' ? 'var(--danger)' : '#2196f3', fontWeight: 600 }}>
+            {side === 'back' ? '😈 Unhelpful thought' : '😇 Helpful thought'}
+          </div>
+          {confirming ? (
+            <span style={{ fontSize: '0.78rem', display: 'flex', gap: 6, alignItems: 'center' }}>
+              Clear this pick?
+              <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => clearPick(event.id, side)}>Yes</button>
+              <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => setClearConfirm(null)}>No</button>
+            </span>
+          ) : (
+            <button
+              onClick={() => setClearConfirm({ eventId: event.id, side })}
+              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.75rem', padding: 0 }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <ThoughtPassage thought={pick.archived ? `${pick.text} (archived)` : pick.text} type={side} />
+      </div>
+    );
   };
 
   const toggleEventExpansion = (eventId) => {
@@ -482,25 +528,11 @@ function CheckHistory() {
                     </div>
                   </div>
 
-                  {(event.selected_back_thought || event.selected_forth_thought) && (
+                  {(pickText(event.situation, event.selected_back_thought, 'back') || pickText(event.situation, event.selected_forth_thought, 'forth')) && (
                     <div className="detail-section">
                       <h4>💭 Thoughts During Event</h4>
-                      {event.selected_back_thought && (
-                        <div style={{ marginBottom: '8px' }}>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--danger)', fontWeight: 600, marginBottom: '4px' }}>
-                            😈 Unhelpful thought
-                          </div>
-                          <ThoughtPassage thought={event.selected_back_thought} type="back" />
-                        </div>
-                      )}
-                      {event.selected_forth_thought && (
-                        <div>
-                          <div style={{ fontSize: '0.78rem', color: '#2196f3', fontWeight: 600, marginBottom: '4px' }}>
-                            😇 Helpful thought
-                          </div>
-                          <ThoughtPassage thought={event.selected_forth_thought} type="forth" />
-                        </div>
-                      )}
+                      {renderPick(event, 'back')}
+                      {renderPick(event, 'forth')}
                     </div>
                   )}
 
