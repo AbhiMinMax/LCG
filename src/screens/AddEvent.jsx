@@ -5,6 +5,8 @@ import { ThoughtPair } from '../components/ThoughtPassage';
 import { getPathLevel, getRebirthInfo, PATHS, getRebirthSymbols, getNewRebirthSymbol } from '../utils/pathUtils';
 import { setPendingEvent } from '../utils/animationState';
 import { round2 } from '../utils/impactUtils';
+import { DEFAULT_DAY_START_HOUR } from '../utils/dayUtils';
+import AfterthoughtLine from '../components/AfterthoughtLine';
 
 const CHOICE_OPTIONS = [
   { value: 1, label: 'Misguided Action', xp: -5, color: '#dc3545' },
@@ -29,6 +31,7 @@ function AddEvent() {
   const [affectedOpportunities, setAffectedOpportunities] = useState([]);
   const [currentSituation, setCurrentSituation] = useState(null);
   const [dynamicXpEnabled, setDynamicXpEnabled] = useState(false);
+  const [dayStartHour, setDayStartHour] = useState(DEFAULT_DAY_START_HOUR);
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -62,12 +65,14 @@ function AddEvent() {
 
   const loadDynamicXpConfig = async () => {
     try {
-      const [dynamicXp, gameMode] = await Promise.all([
+      const [dynamicXp, gameMode, dayStart] = await Promise.all([
         dbHelpers.getConfig('dynamicXpEnabled', false),
         dbHelpers.getConfig('gameModeEnabled', false),
+        dbHelpers.getConfig('dayStartHour', DEFAULT_DAY_START_HOUR),
       ]);
       setDynamicXpEnabled(dynamicXp);
       setGameModeEnabled(gameMode);
+      setDayStartHour(dayStart);
     } catch (error) {
       console.error('Error loading XP config:', error);
     }
@@ -419,6 +424,16 @@ function AddEvent() {
                 {filteredSituations.find(s => s.id === parseInt(selectedSituation))?.description}
               </div>
             </div>
+          )}
+
+          {/* Afterthoughts from past events of this situation (spec §1.3) */}
+          {selectedSituation && (
+            <AfterthoughtLine
+              key={selectedSituation}
+              events={pastEvents}
+              dayStartHour={dayStartHour}
+              choiceLabels={Object.fromEntries(CHOICE_OPTIONS.map(c => [c.value, c.label]))}
+            />
           )}
 
           <div className="form-group">

@@ -50,6 +50,7 @@ function Customize() {
   const [breadthWeeklyTarget, setBreadthWeeklyTarget] = useState(7);
   const [masteryStreakMinDisplay, setMasteryStreakMinDisplay] = useState(3);
   const [opportunityBossWindow, setOpportunityBossWindow] = useState(20);
+  const [dayStartHour, setDayStartHour] = useState(4);
   
   // Archived opportunities (separate from active list)
   const [archivedOpportunities, setArchivedOpportunities] = useState([]);
@@ -171,6 +172,7 @@ function Customize() {
         dbHelpers.getConfig('masteryStreakMinDisplay', 3),
         dbHelpers.getConfig('opportunityBossWindow', 20),
       ]);
+      setDayStartHour(await dbHelpers.getConfig('dayStartHour', 4));
       setDynamicXpEnabled(dynamicXp);
       setCloudSyncEnabled(cloudSync);
       setGameModeEnabled(gameMode);
@@ -216,6 +218,17 @@ function Customize() {
   const handleBreadthTargetChange      = v => saveNumConfig('breadthWeeklyTarget', v, 2, 14, 7,  setBreadthWeeklyTarget);
   const handleMasteryMinDisplayChange  = v => saveNumConfig('masteryStreakMinDisplay', v, 1, 10, 3, setMasteryStreakMinDisplay);
   const handleOppBossWindowChange      = v => saveNumConfig('opportunityBossWindow', v, 5, 50, 20, setOpportunityBossWindow);
+  // 0 is a valid hour, so this can't use saveNumConfig's `|| default`
+  const handleDayStartHourChange = async v => {
+    const n = parseInt(v, 10);
+    const h = Number.isInteger(n) ? Math.max(0, Math.min(23, n)) : 4;
+    setDayStartHour(h);
+    try {
+      await dbHelpers.setConfig('dayStartHour', h);
+    } catch (error) {
+      console.error('Error saving config dayStartHour:', error);
+    }
+  };
 
   useEffect(() => {
     const filterAndSortSituations = () => {
@@ -2317,6 +2330,29 @@ function Customize() {
                 ))}
               </div>
             )}
+
+            <div className="patterns-settings" style={{
+              padding: '15px',
+              background: 'var(--bg-tertiary)',
+              borderRadius: '8px',
+              marginBottom: '20px'
+            }}>
+              <h4 style={{margin: '0 0 12px 0', fontSize: '1rem'}}>🕓 Days & Patterns</h4>
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '14px' }}>
+                <span>A new day starts at</span>
+                <input
+                  id="day-start-hour"
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={dayStartHour}
+                  onChange={e => handleDayStartHourChange(e.target.value)}
+                  style={{ width: '56px', padding: '3px 6px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.9rem', textAlign: 'center' }}
+                />
+                <span>:00</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: 4 }}>(Default 4, range 0–23. Late-night events count toward the previous day.)</span>
+              </div>
+            </div>
 
             <div style={{
               padding: '15px',

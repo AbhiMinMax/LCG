@@ -1158,6 +1158,23 @@ export const dbHelpers = {
     };
   },
 
+  // Set, edit or clear an event's afterthought (hindsight written later).
+  // Empty text clears it (null). written_at is kept across edits.
+  async setAfterthought(eventId, text) {
+    const event = await db.events.get(eventId);
+    if (!event) return null;
+    const trimmed = typeof text === 'string' ? text.trim() : '';
+    let afterthought = null;
+    if (trimmed) {
+      const now = new Date();
+      afterthought = event.afterthought
+        ? { ...event.afterthought, text: trimmed, updated_at: now }
+        : { text: trimmed, written_at: now, updated_at: now };
+    }
+    await db.events.update(eventId, { afterthought });
+    return afterthought;
+  },
+
   // Get events with situation details (for history)
   async getEventsWithDetails() {
     const events = await db.events.orderBy('timestamp').reverse().toArray();

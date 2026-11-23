@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db, dbHelpers, ANTAGONIST_LEVEL_LABELS } from '../database/db';
 import { ThoughtPassage } from '../components/ThoughtPassage';
+import { formatAddedLater, DEFAULT_DAY_START_HOUR } from '../utils/dayUtils';
 import './ProgressStyles.css';
 
 const fmtXp = (v) => parseFloat((v || 0).toFixed(2));
@@ -30,6 +31,9 @@ function CheckHistory() {
   const [filterThoughts, setFilterThoughts] = useState(false);
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
   const [openAntagonistPopover, setOpenAntagonistPopover] = useState(null); // eventId
+  const [dayStartHour, setDayStartHour] = useState(DEFAULT_DAY_START_HOUR);
+  const [editingAfterthoughtId, setEditingAfterthoughtId] = useState(null);
+  const [afterthoughtDraft, setAfterthoughtDraft] = useState('');
 
   useEffect(() => {
     loadEvents();
@@ -38,8 +42,12 @@ function CheckHistory() {
 
   const loadConfig = async () => {
     try {
-      const gameMode = await dbHelpers.getConfig('gameModeEnabled', false);
+      const [gameMode, dayStart] = await Promise.all([
+        dbHelpers.getConfig('gameModeEnabled', false),
+        dbHelpers.getConfig('dayStartHour', DEFAULT_DAY_START_HOUR),
+      ]);
       setGameModeEnabled(gameMode);
+      setDayStartHour(dayStart);
     } catch (error) {
       console.error('Error loading config:', error);
     }
@@ -75,6 +83,23 @@ function CheckHistory() {
     } catch (error) {
       console.error('Error deleting event:', error);
       alert('Error deleting event. Please try again.');
+    }
+  };
+
+  const startAfterthoughtEdit = (event) => {
+    setEditingAfterthoughtId(event.id);
+    setAfterthoughtDraft(event.afterthought?.text || '');
+  };
+
+  const saveAfterthought = async (eventId) => {
+    try {
+      const afterthought = await dbHelpers.setAfterthought(eventId, afterthoughtDraft);
+      setEvents(prev => prev.map(e => (e.id === eventId ? { ...e, afterthought } : e)));
+      setEditingAfterthoughtId(null);
+      setAfterthoughtDraft('');
+    } catch (error) {
+      console.error('Error saving afterthought:', error);
+      alert('Error saving afterthought. Please try again.');
     }
   };
 
@@ -275,7 +300,12 @@ function CheckHistory() {
               >
                 <div className="event-meta">
                   <div className="event-time">{formatTimestamp(event.timestamp)}</div>
-                  <div className="event-situation">{event.situation.title}</div>
+                  <div className="event-situation">
+                    {event.situation.title}
+                    {event.afterthought && (
+                      <span title="Has an afterthought" style={{ marginLeft: 6 }}>💭</span>
+                    )}
+                  </div>
                 </div>
                 <div className="event-summary">
                   <span
@@ -335,6 +365,55 @@ function CheckHistory() {
                 >
                   {CHOICE_LABELS[event.choice_value]}
                 </div>
+              </div>
+
+              {/* Afterthought: hindsight written later, added/edited inline */}
+              <div className="afterthought-row" style={{ padding: '6px 14px 10px', fontSize: '0.85rem' }}>
+                {editingAfterthoughtId === event.id ? (
+                  <div>
+                    <textarea
+                      className="form-input"
+                      aria-label="Afterthought"
+                      rows={2}
+                      autoFocus
+                      value={afterthoughtDraft}
+                      onChange={e => setAfterthoughtDraft(e.target.value)}
+                      placeholder="Looking back, what would you do differently, or what are you glad you did?"
+                      style={{ width: '100%', fontSize: '0.9rem' }}
+                    />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+                      <button className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '4px 10px' }} onClick={() => saveAfterthought(event.id)}>
+                        Save
+                      </button>
+                      <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '4px 10px' }} onClick={() => setEditingAfterthoughtId(null)}>
+                        Cancel
+                      </button>
+                      {event.afterthought && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Clear the text and save to remove it.</span>
+                      )}
+                    </div>
+                  </div>
+                ) : event.afterthought ? (
+                  <div>
+                    <span style={{ color: 'var(--text-primary)' }}>💭 {event.afterthought.text}</span>
+                    <span style={{ color: 'var(--text-secondary)', marginLeft: 6, fontSize: '0.78rem' }}>
+                      · {formatAddedLater(event.timestamp, event.afterthought.written_at, dayStartHour)}
+                    </span>
+                    <button
+                      onClick={() => startAfterthoughtEdit(event)}
+                      style={{ background: 'none', border: 'none', color: 'var(--primary-color, #2196f3)', cursor: 'pointer', fontSize: '0.78rem', marginLeft: 6, padding: 0 }}
+                    >
+                      Edit afterthought
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => startAfterthoughtEdit(event)}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.78rem', padding: 0 }}
+                  >
+                    + Add afterthought
+                  </button>
+                )}
               </div>
 
               {/* Antagonist impact popover */}
