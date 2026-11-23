@@ -9,10 +9,11 @@ import { DEFAULT_DAY_START_HOUR } from '../utils/dayUtils';
 import AfterthoughtLine from '../components/AfterthoughtLine';
 
 const CHOICE_OPTIONS = [
-  { value: 1, label: 'Misguided Action', xp: -5, color: '#dc3545' },
+  // Must match calculateXpChange in db.js
+  { value: 1, label: 'Misguided Action', xp: -4, color: '#dc3545' },
   { value: 2, label: 'Didnt Try', xp: -2, color: '#fd7e14' },
   { value: 3, label: 'Tried', xp: 2, color: '#28a745' },
-  { value: 4, label: 'Well Done!', xp: 5, color: '#007bff' }
+  { value: 4, label: 'Well Done!', xp: 4, color: '#007bff' }
 ];
 
 // Game mode base XP (before real/meta doubling)
