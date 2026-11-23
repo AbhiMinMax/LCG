@@ -9,6 +9,9 @@ import { DEFAULT_DAY_START_HOUR } from '../utils/dayUtils';
 import AfterthoughtLine from '../components/AfterthoughtLine';
 import { ThoughtPickRows, ThoughtsView } from '../components/ThoughtPicks';
 import { buildThoughtStats } from '../utils/thoughtUtils';
+import { analyzeChains, CHAIN_DEFAULTS } from '../utils/chainUtils';
+import { ComesWith, Routes, AfterLogLine } from '../components/ChainViews';
+import { db } from '../database/db';
 
 const CHOICE_OPTIONS = [
   // Must match calculateXpChange in db.js
@@ -47,12 +50,27 @@ function AddEvent() {
   const [expandedChoiceSection, setExpandedChoiceSection] = useState({});
   const [taggedAntagonists, setTaggedAntagonists] = useState([]);
   const [antagonistTaggedSitIds, setAntagonistTaggedSitIds] = useState(new Set());
+  // Chains (spec §4): all events + settings; analysis is recalculated, never stored
+  const [allEvents, setAllEvents] = useState([]);
+  const [chainConfig, setChainConfig] = useState(CHAIN_DEFAULTS);
+  const [afterLogText, setAfterLogText] = useState(null);
 
   useEffect(() => {
     loadSituations();
     loadDynamicXpConfig();
     loadAntagonistTaggedSits();
+    loadChainData();
   }, []);
+
+  const loadChainData = async () => {
+    try {
+      const [evs, cfg] = await Promise.all([db.events.toArray(), dbHelpers.getChainConfig()]);
+      setAllEvents(evs);
+      setChainConfig(cfg);
+    } catch (error) {
+      console.error('Error loading chain data:', error);
+    }
+  };
 
   const loadAntagonistTaggedSits = async () => {
     try {
@@ -170,6 +188,11 @@ function AddEvent() {
     setSubmitting(true);
     
     try {
+      // After-log line: strongest passing chain from this situation, from
+      // completed days only (so the event being logged isn't counted).
+      const loggedSitId = parseInt(selectedSituation);
+      const strongest = chainAnalysis && chainConfig.chainAfterLogLine ? chainAnalysis.strongestAfter(loggedSitId) : null;
+
       const result = await dbHelpers.addEvent(
         parseInt(selectedSituation),
         eventDescription.trim(),
@@ -181,6 +204,11 @@ function AddEvent() {
 
       setLastResult(result);
       setShowSuccess(true);
+      // Replaces any previous line (or clears it when this event has none)
+      setAfterLogText(strongest
+        ? `${situationTitles[strongest.to] || 'Unknown'} has followed this ${strongest.follows} of ${strongest.n} times.`
+        : null);
+      loadChainData();
 
       // Store animation state for progress page (game mode only)
       if (gameModeEnabled) {
@@ -223,6 +251,32 @@ function AddEvent() {
     setBackPick(null);
     setForthPick(null);
   }, [selectedSituation]);
+
+  // Chains: analysed from all events; hidden entirely when switched off
+  const chainAnalysis = useMemo(
+    () => (chainConfig.chainsEnabled ? analyzeChains(allEvents, chainConfig, new Date()) : null),
+    [allEvents, chainConfig]
+  );
+  const situationTitles = useMemo(
+    () => Object.fromEntries(situations.map(s => [s.id, s.title])),
+    [situations]
+  );
+  const chosenSitId = selectedSituation ? parseInt(selectedSituation) : null;
+  const comesWith = useMemo(
+    () => (chainAnalysis && chosenSitId ? chainAnalysis.comesWith(chosenSitId) : null),
+    [chainAnalysis, chosenSitId]
+  );
+  // Routes through the chosen situation, per active antagonist tagged to it (game mode)
+  const routeGroups = useMemo(() => {
+    if (!chainAnalysis || !chosenSitId || !gameModeEnabled) return [];
+    return taggedAntagonists.map(ant => ({
+      name: ant.name,
+      routes: chainAnalysis
+        .routes(ant.taggedSituationIds || [], Infinity)
+        .filter(r => r.path.includes(chosenSitId))
+        .slice(0, 3),
+    }));
+  }, [chainAnalysis, chosenSitId, gameModeEnabled, taggedAntagonists]);
 
   // Linked thoughts: stats for the chosen situation (spec §2)
   const thoughtStats = useMemo(
@@ -405,6 +459,7 @@ function AddEvent() {
       )}
 
       <form onSubmit={handleSubmit}>
+        <AfterLogLine text={chainConfig.chainsEnabled ? afterLogText : null} onDismiss={() => setAfterLogText(null)} />
         <div className="card">
           <div className="form-group">
             <label htmlFor="search" className="form-label">
@@ -474,6 +529,12 @@ function AddEvent() {
 
           {/* Thoughts stats for this situation (spec §2.3) */}
           {selectedSituation && currentSituation && <ThoughtsView stats={thoughtStats} />}
+
+          {/* Chains for this situation (spec §4.6) and routes through it (§4.5) */}
+          {selectedSituation && <ComesWith relations={comesWith} titles={situationTitles} />}
+          {selectedSituation && gameModeEnabled && (
+            <Routes groups={routeGroups} titles={situationTitles} highlight={chosenSitId} />
+          )}
 
           <div className="form-group">
             <label htmlFor="title" className="form-label">

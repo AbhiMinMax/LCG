@@ -3,6 +3,7 @@ import Dexie from 'dexie';
 import { XP_PER_LEVEL, REBIRTH_XP } from '../utils/pathUtils';
 import { IMPACT_FACTORS, normalizeImpact, round2, eventOppFactor } from '../utils/impactUtils';
 import { normalizeThoughtPairs, pairsFromLegacy, newPairId, referencedPairIds } from '../utils/thoughtUtils';
+import { CHAIN_DEFAULTS } from '../utils/chainUtils';
 export { IMPACT_FACTORS };
 
 // FROZEN — the path level curve as it stood before the flat-XP change.
@@ -1195,6 +1196,13 @@ export const dbHelpers = {
       updatedOpportunities,
       antagonistImpacts,
     };
+  },
+
+  // Chain settings (spec §4.1), with defaults for missing keys.
+  async getChainConfig() {
+    const keys = Object.keys(CHAIN_DEFAULTS);
+    const values = await Promise.all(keys.map(k => this.getConfig(k, CHAIN_DEFAULTS[k])));
+    return Object.fromEntries(keys.map((k, i) => [k, values[i]]));
   },
 
   // Set, edit or clear an event's afterthought (hindsight written later).

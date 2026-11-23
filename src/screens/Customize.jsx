@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, dbHelpers, ensureDefaultData, ANTAGONIST_HP_POOLS, ANTAGONIST_LEVEL_LABELS, IMPACT_FACTORS, getImpactFactor, formatImpactFactor } from '../database/db';
 import { referencedPairIds } from '../utils/thoughtUtils';
+import { CHAIN_DEFAULTS } from '../utils/chainUtils';
 import TagInput from '../components/TagInput';
 import PWAUninstall from '../components/PWAUninstall';
 import { ThoughtPair } from '../components/ThoughtPassage';
@@ -52,6 +53,8 @@ function Customize() {
   const [masteryStreakMinDisplay, setMasteryStreakMinDisplay] = useState(3);
   const [opportunityBossWindow, setOpportunityBossWindow] = useState(20);
   const [dayStartHour, setDayStartHour] = useState(4);
+  const [chainSettings, setChainSettings] = useState(CHAIN_DEFAULTS);
+  const [chainDrafts, setChainDrafts] = useState({}); // raw text while typing; saved on blur
   const [referencedThoughtIds, setReferencedThoughtIds] = useState(new Set()); // pair ids picked by events
   
   // Archived opportunities (separate from active list)
@@ -175,6 +178,7 @@ function Customize() {
         dbHelpers.getConfig('opportunityBossWindow', 20),
       ]);
       setDayStartHour(await dbHelpers.getConfig('dayStartHour', 4));
+      setChainSettings(await dbHelpers.getChainConfig());
       setDynamicXpEnabled(dynamicXp);
       setCloudSyncEnabled(cloudSync);
       setGameModeEnabled(gameMode);
@@ -220,6 +224,22 @@ function Customize() {
   const handleBreadthTargetChange      = v => saveNumConfig('breadthWeeklyTarget', v, 2, 14, 7,  setBreadthWeeklyTarget);
   const handleMasteryMinDisplayChange  = v => saveNumConfig('masteryStreakMinDisplay', v, 1, 10, 3, setMasteryStreakMinDisplay);
   const handleOppBossWindowChange      = v => saveNumConfig('opportunityBossWindow', v, 5, 50, 20, setOpportunityBossWindow);
+  // Chain settings (spec §4.1). Numbers are clamped to their range; an
+  // unparseable value falls back to the default.
+  const saveChainSetting = async (key, raw, min, max) => {
+    let value = raw;
+    if (typeof raw !== 'boolean') {
+      const n = parseFloat(raw);
+      value = Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : CHAIN_DEFAULTS[key];
+    }
+    setChainSettings(prev => ({ ...prev, [key]: value }));
+    try {
+      await dbHelpers.setConfig(key, value);
+    } catch (error) {
+      console.error(`Error saving config ${key}:`, error);
+    }
+  };
+
   // 0 is a valid hour, so this can't use saveNumConfig's `|| default`
   const handleDayStartHourChange = async v => {
     const n = parseInt(v, 10);
@@ -2391,6 +2411,56 @@ function Customize() {
                 <span>:00</span>
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: 4 }}>(Default 4, range 0–23. Late-night events count toward the previous day.)</span>
               </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', marginBottom: '10px' }}>
+                <input
+                  id="chains-enabled"
+                  type="checkbox"
+                  checked={chainSettings.chainsEnabled}
+                  onChange={e => saveChainSetting('chainsEnabled', e.target.checked)}
+                />
+                <span>Show chains (situations that come before, after or together)</span>
+              </label>
+              {chainSettings.chainsEnabled && (
+                <>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', marginBottom: '12px' }}>
+                    <input
+                      type="checkbox"
+                      checked={chainSettings.chainAfterLogLine}
+                      onChange={e => saveChainSetting('chainAfterLogLine', e.target.checked)}
+                    />
+                    <span>Show a quiet line after logging</span>
+                  </label>
+                  {[
+                    { key: 'batchMinutes', label: 'Events within', suffix: 'minutes count as logged together', min: 0, max: 120, step: 1 },
+                    { key: 'chainMinCount', label: 'Minimum occurrences', suffix: '', min: 1, max: 20, step: 1 },
+                    { key: 'chainMinRate', label: 'Minimum rate', suffix: '(0–1)', min: 0, max: 1, step: 0.05 },
+                    { key: 'chainMinLift', label: 'Minimum lift over normal', suffix: '×', min: 1, max: 5, step: 0.1 },
+                    { key: 'helpsMinCases', label: '"Helps" needs at least', suffix: 'cases on each side', min: 1, max: 20, step: 1 },
+                    { key: 'helpsMinGap', label: '"Helps" minimum success-rate gap', suffix: '(0–1)', min: 0, max: 1, step: 0.05 },
+                  ].map(({ key, label, suffix, min, max, step }) => (
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '10px' }}>
+                      <span>{label}</span>
+                      <input
+                        type="number"
+                        min={min}
+                        max={max}
+                        step={step}
+                        value={chainDrafts[key] ?? chainSettings[key]}
+                        onChange={e => setChainDrafts(d => ({ ...d, [key]: e.target.value }))}
+                        onBlur={() => {
+                          if (chainDrafts[key] === undefined) return;
+                          saveChainSetting(key, chainDrafts[key], min, max);
+                          setChainDrafts(d => { const n = { ...d }; delete n[key]; return n; });
+                        }}
+                        style={{ width: '64px', padding: '3px 6px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.9rem', textAlign: 'center' }}
+                      />
+                      {suffix && <span>{suffix}</span>}
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: 4 }}>(Default {CHAIN_DEFAULTS[key]})</span>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
 
             <div style={{

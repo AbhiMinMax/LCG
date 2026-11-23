@@ -5,6 +5,8 @@ import { TRAITS, computeUnlockedTraitIds } from '../utils/traitUtils';
 import { consumePendingEvent, storeBossSnapshot, getPrevBossSnapshot } from '../utils/animationState';
 import { computeOppStreaks, computeBosses } from '../utils/bossUtils';
 import { oppGameXp } from '../utils/impactUtils';
+import { analyzeChains } from '../utils/chainUtils';
+import { Routes } from '../components/ChainViews';
 import './ProgressStyles.css';
 
 // ─── Inline sparkline ────────────────────────────────────────────────────────
@@ -637,7 +639,7 @@ function GameOppCard({ opp, expanded, onToggle, streaks, masteryMin = 3, shouldP
 const ANT_RED = '#8b2020';
 const ANT_RED_DIM = 'rgba(139,32,32,0.15)';
 
-function AntagonistCard({ antagonist, taggedTitles = [], lastHitDaysAgo, recentChange, barReady }) {
+function AntagonistCard({ antagonist, taggedTitles = [], lastHitDaysAgo, recentChange, barReady, routes = [], sitTitles = {} }) {
   const maxHP = ANTAGONIST_HP_POOLS[antagonist.currentLevel] || 1;
   const hpPct = Math.min(100, Math.max(0, (antagonist.currentHP / maxHP) * 100));
   const label = ANTAGONIST_LEVEL_LABELS[antagonist.currentLevel] || '';
@@ -739,6 +741,10 @@ function AntagonistCard({ antagonist, taggedTitles = [], lastHitDaysAgo, recentC
               ))}
             </div>
           )}
+          {/* Routes: chains of situations that lead into each other (spec §4.5) */}
+          <div onClick={e => e.stopPropagation()}>
+            <Routes groups={[{ name: null, routes }]} titles={sitTitles} />
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 8, fontSize: '0.72rem' }}>
             <span>Started: {new Date(antagonist.createdAt).toLocaleDateString()}</span>
             <span>Starting level: {antagonist.startingLevel} ({ANTAGONIST_LEVEL_LABELS[antagonist.startingLevel]})</span>
@@ -771,6 +777,7 @@ function GameProgress() {
   const [antagonists, setAntagonists]               = useState([]);
   const [antagonistChanges, setAntagonistChanges]   = useState(null); // { [antagonistId]: impact }
   const [antagonistSituations, setAntagonistSituations] = useState({}); // { sitId → title }
+  const [antagonistRoutes, setAntagonistRoutes] = useState({}); // { antagonistId → [{path}] }
   const [antagonistLastHits, setAntagonistLastHits] = useState({}); // { antagonistId → daysAgo }
 
   useEffect(() => {
@@ -837,6 +844,15 @@ function GameProgress() {
         // Build sitId → title map
         const sitTitleMap = Object.fromEntries(allSitsForAnts.map(s => [s.id, s.title]));
         setAntagonistSituations(sitTitleMap);
+
+        // Routes per antagonist (spec §4.5), when chains are on
+        const chainCfg = await dbHelpers.getChainConfig();
+        if (chainCfg.chainsEnabled) {
+          const analysis = analyzeChains(allEventsForAnts, chainCfg, new Date());
+          setAntagonistRoutes(Object.fromEntries(
+            activeAnts.map(ant => [ant.id, analysis.routes(ant.taggedSituationIds || [], 3)])
+          ));
+        }
 
         // Compute last-hit for each antagonist: days since last positive game XP event on any tagged situation
         const lastHits = {};
@@ -961,6 +977,8 @@ function GameProgress() {
                 lastHitDaysAgo={antagonistLastHits[ant.id] ?? null}
                 recentChange={antagonistChanges ? antagonistChanges[ant.id] : null}
                 barReady={barsReady}
+                routes={antagonistRoutes[ant.id] || []}
+                sitTitles={antagonistSituations}
               />
             );
           })}
