@@ -1,3 +1,4 @@
+import { oppGameXp } from './impactUtils';
 import { getPathLevel } from './pathUtils';
 import { TRAITS } from './traitUtils';
 
@@ -64,7 +65,7 @@ function oppXpInPeriod(events, oppId) {
   let total = 0;
   for (const e of events) {
     if (Array.isArray(e.affected_opportunities) && e.affected_opportunities.includes(oppId)) {
-      total += e.game_xp_change || 0;
+      total += oppGameXp(e, oppId);
     }
   }
   return total;
@@ -118,7 +119,7 @@ function activeOppBosses(events, opportunities, window = 20) {
       Array.isArray(e.affected_opportunities) && e.affected_opportunities.includes(opp.id)
     );
     if (oppEvs.length < window) continue;
-    const netXp = oppEvs.slice(0, window).reduce((s, e) => s + (e.game_xp_change || 0), 0);
+    const netXp = oppEvs.slice(0, window).reduce((s, e) => s + oppGameXp(e, opp.id), 0);
     if (netXp >= 0) continue;
     let succStreak = 0;
     for (const e of oppEvs) {
@@ -321,7 +322,7 @@ export function generateWeeklyNarrative(events, situations, opportunities, profi
   for (const e of weekEvs) {
     if (!Array.isArray(e.affected_opportunities)) continue;
     for (const id of e.affected_opportunities) {
-      weekOppXp[id] = (weekOppXp[id] || 0) + (e.game_xp_change || 0);
+      weekOppXp[id] = (weekOppXp[id] || 0) + oppGameXp(e, id);
     }
   }
   const topOppEntry = Object.entries(weekOppXp).sort((a, b) => b[1] - a[1])[0];
@@ -411,7 +412,7 @@ export function generateMonthlyNarrative(events, situations, opportunities, prof
   for (const e of monthEvs) {
     if (!Array.isArray(e.affected_opportunities)) continue;
     for (const id of e.affected_opportunities) {
-      monthOppXp[id] = (monthOppXp[id] || 0) + (e.game_xp_change || 0);
+      monthOppXp[id] = (monthOppXp[id] || 0) + oppGameXp(e, id);
     }
   }
 
@@ -430,7 +431,7 @@ export function generateMonthlyNarrative(events, situations, opportunities, prof
     for (const e of evs) {
       if (!Array.isArray(e.affected_opportunities)) continue;
       for (const id of e.affected_opportunities) {
-        m[id] = (m[id] || 0) + (e.game_xp_change || 0);
+        m[id] = (m[id] || 0) + oppGameXp(e, id);
       }
     }
     const top = Object.entries(m).sort((a, b) => b[1] - a[1])[0];

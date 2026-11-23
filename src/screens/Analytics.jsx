@@ -25,6 +25,7 @@ import {
   eventXp,
 } from '../utils/analyticsUtils';
 import { generateDailyNarrative, generateWeeklyNarrative, generateMonthlyNarrative } from '../utils/narrativeUtils';
+import { oppGameXp } from '../utils/impactUtils';
 import './Analytics.css';
 
 ChartJS.register(
@@ -94,7 +95,7 @@ function computeGameAnalyticsData(rawEvents, rawOpps, rawSits, profile) {
     const weekXP = Array(8).fill(0);
     for (const ev of evs) {
       const wIdx = Math.floor((now - new Date(ev.timestamp).getTime()) / weekMs);
-      if (wIdx >= 0 && wIdx < 8) weekXP[7 - wIdx] += ev.game_xp_change || 0;
+      if (wIdx >= 0 && wIdx < 8) weekXP[7 - wIdx] += oppGameXp(ev, opp.id);
     }
 
     let attemptStreak = 0, masteryStreak = 0, failureRun = 0, recoveryStreak = 0, recoveryBest = 0;

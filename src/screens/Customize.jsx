@@ -89,6 +89,7 @@ function Customize() {
     description: '',
     tags: [],
     linkedOpportunities: [],
+    opportunityImpacts: {}, // { [opportunityId]: factor } link dimmers; missing = 1
     challengingLevel: 3,
     thoughtPairs: [],   // [{back: string|null, forth: string|null}]
     isMeta: false
@@ -397,7 +398,11 @@ function Customize() {
       }
 
       // Update opportunity links
-      await dbHelpers.linkSituationToOpportunities(situationId, situationForm.linkedOpportunities);
+      await dbHelpers.linkSituationToOpportunities(
+        situationId,
+        situationForm.linkedOpportunities,
+        situationForm.opportunityImpacts
+      );
 
       resetSituationForm();
       await loadData();
@@ -426,6 +431,7 @@ function Customize() {
       description: situation.description || '',
       tags: situation.tags || [],
       linkedOpportunities: situation.opportunities.map(opp => opp.id),
+      opportunityImpacts: { ...(situation.opportunityImpacts || {}) },
       challengingLevel: situation.challenging_level || 3,
       thoughtPairs,
       isMeta: situation.isMeta === true
@@ -672,6 +678,7 @@ function Customize() {
       description: '',
       tags: [],
       linkedOpportunities: [],
+      opportunityImpacts: {},
       challengingLevel: 3,
       thoughtPairs: [],
       isMeta: false
@@ -1254,6 +1261,9 @@ function Customize() {
 
                 <div className="form-group">
                   <label className="form-label">Linked Opportunities</label>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                    Impact (×) scales the XP each linked opportunity gets from this situation. Applies to future events.
+                  </div>
                   <div className="opportunities-checklist">
                     {opportunities.map(opp => (
                       <label key={opp.id} className="checkbox-item">
@@ -1263,6 +1273,23 @@ function Customize() {
                           onChange={() => toggleOpportunityLink(opp.id)}
                         />
                         <span>{opp.title}</span>
+                        {situationForm.linkedOpportunities.includes(opp.id) && (
+                          <select
+                            aria-label={`Impact on ${opp.title}`}
+                            title="Impact: how strongly this situation trains this opportunity"
+                            value={situationForm.opportunityImpacts?.[opp.id] ?? 1}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => setSituationForm(prev => ({
+                              ...prev,
+                              opportunityImpacts: { ...(prev.opportunityImpacts || {}), [opp.id]: parseFloat(e.target.value) },
+                            }))}
+                            style={{ marginLeft: 'auto', padding: '2px 4px', fontSize: '0.8rem', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                          >
+                            {IMPACT_FACTORS.map(f => (
+                              <option key={f} value={f}>×{f}</option>
+                            ))}
+                          </select>
+                        )}
                       </label>
                     ))}
                   </div>
@@ -1395,7 +1422,9 @@ function Customize() {
                     {situation.opportunities.length > 0 ? (
                       <div className="opportunity-tags">
                         {situation.opportunities.map(opp => (
-                          <span key={opp.id} className="opportunity-tag">{opp.title}</span>
+                          <span key={opp.id} className="opportunity-tag">
+                            {opp.title}{situation.opportunityImpacts?.[opp.id] ? ` ×${situation.opportunityImpacts[opp.id]}` : ''}
+                          </span>
                         ))}
                       </div>
                     ) : (

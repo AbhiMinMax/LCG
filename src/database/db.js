@@ -1,6 +1,8 @@
 // Offline-first database using Dexie (IndexedDB wrapper)
 import Dexie from 'dexie';
 import { XP_PER_LEVEL, REBIRTH_XP } from '../utils/pathUtils';
+import { IMPACT_FACTORS, normalizeImpact, round2, eventOppFactor } from '../utils/impactUtils';
+export { IMPACT_FACTORS };
 
 // FROZEN — the path level curve as it stood before the flat-XP change.
 // Used only by the version 9 upgrade. Never re-tune these: the upgrade has to
@@ -273,11 +275,8 @@ export const db = new LifeProgressDB();
 // antagonist (direct = 1, weaker/indirect links lower). Stored on the
 // antagonist as situationImpact: { [situationId]: factor }. A missing entry
 // means 1, so links made before this feature behave as before.
-export const IMPACT_FACTORS = [1, 0.75, 0.5, 0.25];
-
 export function getImpactFactor(antagonist, situationId) {
-  const f = antagonist?.situationImpact?.[situationId];
-  return IMPACT_FACTORS.includes(f) ? f : 1;
+  return normalizeImpact(antagonist?.situationImpact?.[situationId]);
 }
 
 // Short label for display, e.g. "×0.5". Empty for full impact.
@@ -755,10 +754,17 @@ export const dbHelpers = {
         .where('id')
         .anyOf(opportunityIds)
         .toArray()).filter(o => !o.archived);
+      // Link impact dimmers: { [opportunityId]: factor }, only non-default entries
+      const opportunityImpacts = {};
+      for (const link of links) {
+        const f = normalizeImpact(link.impact);
+        if (f !== 1) opportunityImpacts[link.opportunity_id] = f;
+      }
 
       result.push({
         ...situation,
-        opportunities
+        opportunities,
+        opportunityImpacts
       });
     }
 
@@ -773,8 +779,10 @@ export const dbHelpers = {
       .toArray();
     
     const opportunityIds = links.map(link => link.opportunity_id);
+    const impactById = Object.fromEntries(links.map(l => [l.opportunity_id, normalizeImpact(l.impact)]));
     const opps = await db.opportunities.where('id').anyOf(opportunityIds).toArray();
-    return opps.filter(o => !o.archived);
+    // `impact` is the link's dimmer (not an opportunity field); never written back.
+    return opps.filter(o => !o.archived).map(o => ({ ...o, impact: impactById[o.id] ?? 1 }));
   },
 
   // Game mode XP calculation (separate from standard mode XP).
@@ -993,7 +1001,7 @@ export const dbHelpers = {
     const opportunity = await db.opportunities.get(opportunityId);
     if (!opportunity) return null;
 
-    let newXp = opportunity.current_xp + xpChange;
+    let newXp = round2(opportunity.current_xp + xpChange);
     let newLevel = opportunity.current_level;
 
     // Handle negative XP (cannot go below 0)
@@ -1036,6 +1044,11 @@ export const dbHelpers = {
 
     const opportunities = await this.getOpportunitiesForSituation(situationId);
     const affectedOpportunityIds = opportunities.map(opp => opp.id);
+    // Snapshot of link dimmers at log time (only non-default factors)
+    const opportunityImpacts = {};
+    for (const opp of opportunities) {
+      if (opp.impact !== 1) opportunityImpacts[opp.id] = opp.impact;
+    }
 
     // Generate title if not provided
     const choiceLabels = {
@@ -1057,7 +1070,8 @@ export const dbHelpers = {
       selected_back_thought: selectedBackThought,
       selected_forth_thought: selectedForthThought,
       timestamp: new Date(),
-      affected_opportunities: affectedOpportunityIds
+      affected_opportunities: affectedOpportunityIds,
+      opportunityImpacts
     });
 
     // Update situation challenging level based on choice (auto-adjust feature)
@@ -1083,13 +1097,20 @@ export const dbHelpers = {
     // Update all linked opportunities
     const updatedOpportunities = [];
     for (const opportunity of opportunities) {
-      const updated = await this.updateOpportunityXp(opportunity.id, xpChange);
+      // Each opportunity's share is scaled by its link dimmer
+      const factor = opportunity.impact;
+      const oppXp = factor === 1 ? xpChange : round2(xpChange * factor);
+      const updated = await this.updateOpportunityXp(opportunity.id, oppXp);
       if (updated) {
+        updated.xpDelta = oppXp;
+        updated.impact = factor;
         // Also accumulate game XP when game mode is on
         if (isGameMode && gameXpChange !== null) {
-          const newGameXp = Math.max(0, (opportunity.game_xp || 0) + gameXpChange);
+          const oppGameXp = factor === 1 ? gameXpChange : round2(gameXpChange * factor);
+          const newGameXp = round2(Math.max(0, (opportunity.game_xp || 0) + oppGameXp));
           await db.opportunities.update(opportunity.id, { game_xp: newGameXp });
           updated.game_xp = newGameXp;
+          updated.gameXpDelta = oppGameXp;
         }
         updatedOpportunities.push(updated);
       }
@@ -1360,7 +1381,8 @@ export const dbHelpers = {
         eventUpdates.push({ key: ev.id, changes: { game_xp_change: gxp } });
         if (Array.isArray(ev.affected_opportunities)) {
           for (const oppId of ev.affected_opportunities) {
-            oppDelta[oppId] = (oppDelta[oppId] || 0) + gxp;
+            const f = eventOppFactor(ev, oppId);
+            oppDelta[oppId] = (oppDelta[oppId] || 0) + (f === 1 ? gxp : round2(gxp * f));
           }
         }
       }
@@ -1472,7 +1494,17 @@ export const dbHelpers = {
       const newIds = ev.affected_opportunities
         .map(id => (id === mergedId ? survivorId : id))
         .filter((id, idx, arr) => arr.indexOf(id) === idx); // deduplicate
-      await db.events.update(ev.id, { affected_opportunities: newIds });
+      const changes = { affected_opportunities: newIds };
+      // Move the merged opportunity's dimmer snapshot, unless the survivor was
+      // already on this event (then the survivor keeps its own factor).
+      if (ev.opportunityImpacts && mergedId in ev.opportunityImpacts) {
+        const impacts = { ...ev.opportunityImpacts };
+        const mergedFactor = impacts[mergedId];
+        delete impacts[mergedId];
+        if (!ev.affected_opportunities.includes(survivorId)) impacts[survivorId] = mergedFactor;
+        changes.opportunityImpacts = impacts;
+      }
+      await db.events.update(ev.id, changes);
     }
 
     // Redirect situation_opportunity links
@@ -1483,7 +1515,9 @@ export const dbHelpers = {
         .equals([link.situation_id, survivorId])
         .first();
       if (!existing) {
-        await db.situation_opportunities.add({ situation_id: link.situation_id, opportunity_id: survivorId });
+        const newLink = { situation_id: link.situation_id, opportunity_id: survivorId };
+        if (normalizeImpact(link.impact) !== 1) newLink.impact = link.impact;
+        await db.situation_opportunities.add(newLink);
       }
     }
     await db.situation_opportunities.where('opportunity_id').equals(mergedId).delete();
@@ -1493,15 +1527,18 @@ export const dbHelpers = {
   },
 
   // Link a situation to opportunities
-  async linkSituationToOpportunities(situationId, opportunityIds) {
+  // opportunityImpacts: optional { [opportunityId]: factor }; missing = 1.
+  async linkSituationToOpportunities(situationId, opportunityIds, opportunityImpacts = {}) {
     // Remove existing links
     await db.situation_opportunities.where('situation_id').equals(situationId).delete();
     
     // Add new links
-    const links = opportunityIds.map(opportunityId => ({
-      situation_id: situationId,
-      opportunity_id: opportunityId
-    }));
+    const links = opportunityIds.map(opportunityId => {
+      const link = { situation_id: situationId, opportunity_id: opportunityId };
+      const f = normalizeImpact(opportunityImpacts?.[opportunityId]);
+      if (f !== 1) link.impact = f;
+      return link;
+    });
     
     if (links.length > 0) {
       await db.situation_opportunities.bulkAdd(links);

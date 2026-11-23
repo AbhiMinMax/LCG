@@ -4,6 +4,7 @@ import { dbHelpers, ANTAGONIST_LEVEL_LABELS, getImpactFactor, formatImpactFactor
 import { ThoughtPair } from '../components/ThoughtPassage';
 import { getPathLevel, getRebirthInfo, PATHS, getRebirthSymbols, getNewRebirthSymbol } from '../utils/pathUtils';
 import { setPendingEvent } from '../utils/animationState';
+import { round2 } from '../utils/impactUtils';
 
 const CHOICE_OPTIONS = [
   { value: 1, label: 'Misguided Action', xp: -5, color: '#dc3545' },
@@ -247,7 +248,8 @@ function AddEvent() {
 
     let xp = choice.xp;
     if (dynamicXpEnabled && currentSituation && currentSituation.challenging_level) {
-      const multiplier = 2 ** (currentSituation.challenging_level - 3);
+      // Rounded difficulty, matching calculateXpChange in addEvent
+      const multiplier = 2 ** (Math.round(currentSituation.challenging_level) - 3);
       xp = xp * multiplier;
     }
     return xp;
@@ -256,6 +258,13 @@ function AddEvent() {
   const getChoiceXp = () => {
     return currentXp;
   };
+
+  // Per-opportunity XP after the link's impact dimmer (spec §6)
+  const getOppXp = (opp) => {
+    const f = opp.impact ?? 1;
+    return f === 1 ? currentXp : round2(currentXp * f);
+  };
+  const anyOppDimmed = affectedOpportunities.some(o => (o.impact ?? 1) !== 1);
 
   if (loading) {
     return (
@@ -325,6 +334,7 @@ function AddEvent() {
                       {opp.title}: {lv.fullLabel} (Lv.{lv.level}, {parseFloat(lv.xpIntoLevel.toFixed(2))}/{parseFloat(lv.xpForLevel.toFixed(2))} XP)
                       <span style={{fontSize: '0.85em', color: 'var(--text-secondary)', marginLeft: '6px'}}>
                         | Game XP: {parseFloat((opp.game_xp || 0).toFixed(2))}
+                        {opp.impact !== undefined && opp.impact !== 1 && ` (${opp.gameXpDelta >= 0 ? '+' : ''}${fmtXp(opp.gameXpDelta)}, impact ×${opp.impact})`}
                       </span>
                     </li>
                   );
@@ -332,6 +342,7 @@ function AddEvent() {
                 return (
                   <li key={opp.id}>
                     {opp.title}: Level {opp.current_level} ({parseFloat((opp.current_xp || 0).toFixed(2))}/100 XP)
+                    {opp.impact !== undefined && opp.impact !== 1 && ` (${opp.xpDelta >= 0 ? '+' : ''}${fmtXp(opp.xpDelta)}, impact ×${opp.impact})`}
                   </li>
                 );
               })}
@@ -645,10 +656,11 @@ function AddEvent() {
             <h3>🎯 Opportunities Affected</h3>
             <p style={{ marginBottom: 8 }}>
               This event will {getChoiceXp() >= 0 ? 'add' : 'subtract'}{' '}
-              <strong>{Math.abs(getChoiceXp())} {gameModeEnabled ? 'game ' : ''}XP</strong> to each:
-              {dynamicXpEnabled && currentSituation && currentSituation.challenging_level !== 3 && (
+              <strong>{fmtXp(Math.abs(getChoiceXp()))} {gameModeEnabled ? 'game ' : ''}XP</strong>{' '}
+              {anyOppDimmed ? 'to each, scaled by its impact:' : 'to each:'}
+              {dynamicXpEnabled && currentSituation && Math.round(currentSituation.challenging_level) !== 3 && (
                 <span style={{ fontSize: '0.9em', color: 'var(--text-secondary)', marginLeft: '8px' }}>
-                  (difficulty ×{2 ** (currentSituation.challenging_level - 3)} applied)
+                  (difficulty ×{fmtXp(2 ** (Math.round(currentSituation.challenging_level) - 3))} applied)
                 </span>
               )}
             </p>
@@ -658,7 +670,7 @@ function AddEvent() {
                   const pathKey = opp.path || 'default';
                   const lvNow  = getPathLevel(opp.game_xp || 0, pathKey);
                   const { rebirths: rebNow } = getRebirthInfo(opp.game_xp || 0);
-                  const newGameXp = Math.max(0, (opp.game_xp || 0) + getChoiceXp());
+                  const newGameXp = round2(Math.max(0, (opp.game_xp || 0) + getOppXp(opp)));
                   const lvNext = getPathLevel(newGameXp, pathKey);
                   const { rebirths: rebNext } = getRebirthInfo(newGameXp);
                   const levelUp  = lvNext.level !== lvNow.level || rebNext !== rebNow;
@@ -667,6 +679,11 @@ function AddEvent() {
                     <li key={opp.id}>
                       <strong>{opp.title}</strong>
                       {rebNow > 0 && <span style={{ marginLeft: 4, color: '#c8a84b' }}>{getRebirthSymbols(rebNow, pathKey)}</span>}
+                      {(opp.impact ?? 1) !== 1 && selectedChoice && (
+                        <span style={{ marginLeft: 6, fontSize: '0.85em', color: 'var(--text-secondary)' }}>
+                          {getOppXp(opp) >= 0 ? '+' : ''}{fmtXp(getOppXp(opp))} XP (impact ×{opp.impact})
+                        </span>
+                      )}
                       {' '}({lvNow.fullLabel}, Lv.{lvNow.level}, {parseFloat(lvNow.xpIntoLevel.toFixed(2))}/{lvNow.xpForLevel} XP)
                       <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginTop: '2px' }}>
                         After: {lvNext.fullLabel} (Lv.{lvNext.level})
@@ -679,15 +696,20 @@ function AddEvent() {
                   );
                 }
                 return (() => {
-                  let previewXp = Math.max(0, opp.current_xp + getChoiceXp());
+                  let previewXp = round2(Math.max(0, opp.current_xp + getOppXp(opp)));
                   let previewLevel = opp.current_level;
                   while (previewXp >= 100) { previewLevel++; previewXp -= 100; }
                   const levelUps = previewLevel - opp.current_level;
                   return (
                     <li key={opp.id}>
-                      <strong>{opp.title}</strong> (Level {opp.current_level}, {opp.current_xp}/100 XP)
+                      <strong>{opp.title}</strong> (Level {opp.current_level}, {fmtXp(opp.current_xp)}/100 XP)
+                      {(opp.impact ?? 1) !== 1 && selectedChoice && (
+                        <span style={{ marginLeft: 6, fontSize: '0.85em', color: 'var(--text-secondary)' }}>
+                          {getOppXp(opp) >= 0 ? '+' : ''}{fmtXp(getOppXp(opp))} XP (impact ×{opp.impact})
+                        </span>
+                      )}
                       <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                        After: Level {previewLevel}, {previewXp}/100 XP
+                        After: Level {previewLevel}, {fmtXp(previewXp)}/100 XP
                         {levelUps > 0 && (
                           <span style={{ color: '#28a745', fontWeight: 'bold', marginLeft: '8px' }}>
                             🎉 Level up{levelUps > 1 ? ` ×${levelUps}` : ''}!

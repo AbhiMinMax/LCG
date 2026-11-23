@@ -4,6 +4,7 @@ import { PATHS, getPathLevel, getRebirthInfo, getRebirthSymbols } from '../utils
 import { TRAITS, computeUnlockedTraitIds } from '../utils/traitUtils';
 import { consumePendingEvent, storeBossSnapshot, getPrevBossSnapshot } from '../utils/animationState';
 import { computeOppStreaks, computeBosses } from '../utils/bossUtils';
+import { oppGameXp } from '../utils/impactUtils';
 import './ProgressStyles.css';
 
 // ─── Inline sparkline ────────────────────────────────────────────────────────
@@ -129,7 +130,7 @@ function computeGameStats(opportunities, events, situations, cfg = {}) {
 
     if (age <= ms30 && gxp > 0 && Array.isArray(ev.affected_opportunities)) {
       for (const id of ev.affected_opportunities) {
-        oppGain30[id] = (oppGain30[id] || 0) + gxp;
+        oppGain30[id] = (oppGain30[id] || 0) + oppGameXp(ev, id);
       }
     }
 
@@ -177,7 +178,7 @@ function computeGameStats(opportunities, events, situations, cfg = {}) {
     for (const ev of events) {
       if (!Array.isArray(ev.affected_opportunities) || !ev.affected_opportunities.includes(opp.id)) continue;
       const wIdx = Math.floor((now - new Date(ev.timestamp).getTime()) / weekMs8);
-      if (wIdx >= 0 && wIdx < 8) vals[7 - wIdx] += ev.game_xp_change || 0;
+      if (wIdx >= 0 && wIdx < 8) vals[7 - wIdx] += oppGameXp(ev, opp.id);
     }
     oppSparklines[opp.id] = vals;
   }

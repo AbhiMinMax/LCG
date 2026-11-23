@@ -1,3 +1,4 @@
+import { oppGameXp } from './impactUtils';
 // Shared boss and streak computation logic used by CheckProgress and Customize.
 
 // Returns { attemptStreak, masteryStreak, failureRun, recoveryStreak, recoveryBest }
@@ -115,7 +116,8 @@ export function computeBosses(opportunities, sorted, sitMap, failThreshold = 5, 
     if (oppEvs.length < oppWindow) continue;
 
     const last20 = oppEvs.slice(0, oppWindow);
-    const netXp = last20.reduce((s, e) => s + (e.game_xp_change || 0), 0);
+    // Dimmed per-opportunity XP (spec §6.3); counts below stay unscaled
+    const netXp = last20.reduce((s, e) => s + oppGameXp(e, opp.id), 0);
     if (netXp >= 0) continue;
 
     let successStreak = 0;
@@ -128,11 +130,11 @@ export function computeBosses(opportunities, sorted, sitMap, failThreshold = 5, 
     const state = successStreak >= dissThreshold ? 'weakening' : 'active';
 
     const negXp = last20.reduce((s, e) => {
-      const gxp = e.game_xp_change || 0;
+      const gxp = oppGameXp(e, opp.id);
       return gxp < 0 ? s + Math.abs(gxp) : s;
     }, 0);
     const posXp = last20.reduce((s, e) => {
-      const gxp = e.game_xp_change || 0;
+      const gxp = oppGameXp(e, opp.id);
       return gxp > 0 ? s + gxp : s;
     }, 0);
 
