@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { dbHelpers, ANTAGONIST_LEVEL_LABELS } from '../database/db';
+import { db, dbHelpers, ANTAGONIST_LEVEL_LABELS } from '../database/db';
 import { ThoughtPassage } from '../components/ThoughtPassage';
 import './ProgressStyles.css';
 
@@ -24,6 +24,8 @@ function CheckHistory() {
   const [loading, setLoading] = useState(true);
   const [expandedEvents, setExpandedEvents] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
+  const [situationFilter, setSituationFilter] = useState(''); // '' = all situations
+  const [allSituations, setAllSituations] = useState([]);
   const [sortOrder, setSortOrder] = useState('desc');
   const [filterThoughts, setFilterThoughts] = useState(false);
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
@@ -45,8 +47,12 @@ function CheckHistory() {
 
   const loadEvents = async () => {
     try {
-      const eventsData = await dbHelpers.getEventsWithDetails();
+      const [eventsData, situationsData] = await Promise.all([
+        dbHelpers.getEventsWithDetails(),
+        db.situations.toArray(),
+      ]);
       setEvents(eventsData);
+      setAllSituations([...situationsData].sort((a, b) => (a.title || '').localeCompare(b.title || '')));
     } catch (error) {
       console.error('Error loading events:', error);
     } finally {
@@ -115,11 +121,19 @@ function CheckHistory() {
     return text.substring(0, maxLength) + '...';
   };
 
+  // Event search: title, description or afterthought (case-insensitive substring).
+  // Situation filter: exact situation from the dropdown. Both must match.
+  const eventQuery = searchTerm.trim().toLowerCase();
+  const matchesEventText = (event) => {
+    if (!eventQuery) return true;
+    return [event.title, event.event_description, event.afterthought?.text]
+      .some(t => typeof t === 'string' && t.toLowerCase().includes(eventQuery));
+  };
+  const isFiltering = eventQuery !== '' || situationFilter !== '';
+
   const filteredEvents = events
-    .filter(event =>
-      event.event_description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.situation.title.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    .filter(matchesEventText)
+    .filter(event => situationFilter === '' || String(event.situation_id) === situationFilter)
     .filter(event =>
       !filterThoughts || event.selected_back_thought || event.selected_forth_thought
     )
@@ -188,15 +202,29 @@ function CheckHistory() {
       {/* Search and Sort */}
       <div className="card">
         <div className="form-group">
-          <label htmlFor="search" className="form-label">Search Events</label>
+          <label htmlFor="search" className="form-label">Event</label>
           <input
             id="search"
             type="text"
             className="form-input"
-            placeholder="Search by description or situation..."
+            placeholder="Search title, description or afterthought…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+        <div className="form-group">
+          <label htmlFor="situation-filter" className="form-label">Situation</label>
+          <select
+            id="situation-filter"
+            className="form-input"
+            value={situationFilter}
+            onChange={(e) => setSituationFilter(e.target.value)}
+          >
+            <option value="">All situations</option>
+            {allSituations.map(s => (
+              <option key={s.id} value={String(s.id)}>{s.title}</option>
+            ))}
+          </select>
         </div>
         <div className="form-group">
           <label className="form-label">Filter</label>
@@ -423,13 +451,13 @@ function CheckHistory() {
 
       {filteredEvents.length === 0 && !loading && (
         <div className="card empty-state">
-          {searchTerm ? (
+          {isFiltering ? (
             <>
               <h3>No Events Found</h3>
               <p>No events match your search criteria.</p>
               <button 
                 className="btn btn-secondary"
-                onClick={() => setSearchTerm('')}
+                onClick={() => { setSearchTerm(''); setSituationFilter(''); }}
               >
                 Clear Search
               </button>
