@@ -5,7 +5,7 @@ import { ThoughtPair } from '../components/ThoughtPassage';
 import { getPathLevel, getRebirthInfo, PATHS, getRebirthSymbols, getNewRebirthSymbol } from '../utils/pathUtils';
 import { setPendingEvent } from '../utils/animationState';
 import { round2 } from '../utils/impactUtils';
-import { DEFAULT_DAY_START_HOUR } from '../utils/dayUtils';
+import { DEFAULT_DAY_START_HOUR, formatEventTimestamp } from '../utils/dayUtils';
 import AfterthoughtLine from '../components/AfterthoughtLine';
 import { ThoughtPickRows, ThoughtsView } from '../components/ThoughtPicks';
 import { buildThoughtStats } from '../utils/thoughtUtils';
@@ -312,17 +312,7 @@ function AddEvent() {
     setFilteredSituations(situations);
   };
 
-  const formatEventDate = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const diffDays = Math.floor((todayOnly - dateOnly) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    if (diffDays === 1) return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString();
-  };
+  const formatEventDate = (timestamp) => formatEventTimestamp(timestamp);
 
   const currentXp = useMemo(() => {
     if (!selectedChoice) return 0;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db, dbHelpers, ANTAGONIST_LEVEL_LABELS } from '../database/db';
 import { ThoughtPassage } from '../components/ThoughtPassage';
-import { formatAddedLater, DEFAULT_DAY_START_HOUR } from '../utils/dayUtils';
+import { formatAddedLater, formatEventTimestamp, formatFullTimestamp, DEFAULT_DAY_START_HOUR } from '../utils/dayUtils';
 import { pickText } from '../utils/thoughtUtils';
 import './ProgressStyles.css';
 
@@ -166,26 +166,7 @@ function CheckHistory() {
     setExpandedEvents(newExpanded);
   };
 
-  const formatTimestamp = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    
-    // Compare dates only (not times) for accurate day calculation
-    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const diffTime = todayOnly - dateOnly;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    } else if (diffDays === 1) {
-      return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
-    } else {
-      return date.toLocaleDateString();
-    }
-  };
+  const formatTimestamp = (timestamp) => formatEventTimestamp(timestamp);
 
   const getXpChangeStyle = (xpChange) => {
     return {
@@ -578,7 +559,7 @@ function CheckHistory() {
 
                   <div className="detail-section">
                     <h4>🕒 Timestamp</h4>
-                    <p>{new Date(event.timestamp).toLocaleString()}</p>
+                    <p>{formatFullTimestamp(event.timestamp)}</p>
                   </div>
                 </div>
               )}

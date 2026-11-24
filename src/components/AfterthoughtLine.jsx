@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatAddedLater, formatLogicalShortDate } from '../utils/dayUtils';
+import { formatAddedLater, formatLogicalShortDate, formatEventTimestamp } from '../utils/dayUtils';
 
 const LIST_CAP = 5;
 
@@ -44,7 +44,7 @@ export default function AfterthoughtLine({ events, dayStartHour, choiceLabels })
           {rows.map(ev => (
             <div key={ev.id} className="afterthought-row" style={{ padding: '6px 0', borderBottom: '1px solid var(--border-color)' }}>
               <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                {formatLogicalShortDate(ev.timestamp, dayStartHour)} · {choiceLabels[ev.choice_value] || ''} · {formatAddedLater(ev.timestamp, ev.afterthought.written_at, dayStartHour)}
+                {formatEventTimestamp(ev.timestamp)} · {choiceLabels[ev.choice_value] || ''} · {formatAddedLater(ev.timestamp, ev.afterthought.written_at, dayStartHour)}
               </div>
               <div style={{ color: 'var(--text-primary)' }}>{ev.afterthought.text}</div>
             </div>
