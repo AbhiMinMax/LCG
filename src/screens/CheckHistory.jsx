@@ -36,6 +36,12 @@ function CheckHistory() {
   const [editingAfterthoughtId, setEditingAfterthoughtId] = useState(null);
   const [afterthoughtDraft, setAfterthoughtDraft] = useState('');
   const [clearConfirm, setClearConfirm] = useState(null); // { eventId, side }
+  const [openAfterthoughts, setOpenAfterthoughts] = useState(new Set()); // event ids expanded
+  const toggleAfterthought = (eventId) => setOpenAfterthoughts(prev => {
+    const next = new Set(prev);
+    if (next.has(eventId)) next.delete(eventId); else next.add(eventId);
+    return next;
+  });
 
   useEffect(() => {
     loadEvents();
@@ -97,6 +103,7 @@ function CheckHistory() {
     try {
       const afterthought = await dbHelpers.setAfterthought(eventId, afterthoughtDraft);
       setEvents(prev => prev.map(e => (e.id === eventId ? { ...e, afterthought } : e)));
+      setOpenAfterthoughts(prev => new Set(prev).add(eventId)); // show what was just saved
       setEditingAfterthoughtId(null);
       setAfterthoughtDraft('');
     } catch (error) {
@@ -440,18 +447,38 @@ function CheckHistory() {
                     </div>
                   </div>
                 ) : event.afterthought ? (
-                  <div>
-                    <span style={{ color: 'var(--text-primary)' }}>💭 {event.afterthought.text}</span>
-                    <span style={{ color: 'var(--text-secondary)', marginLeft: 6, fontSize: '0.78rem' }}>
-                      · {formatAddedLater(event.timestamp, event.afterthought.written_at, dayStartHour)}
-                    </span>
+                  openAfterthoughts.has(event.id) ? (
+                    <div>
+                      <button
+                        className="afterthought-toggle"
+                        onClick={() => toggleAfterthought(event.id)}
+                        aria-expanded="true"
+                        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.85rem' }}
+                      >
+                        💭 {event.afterthought.text} <span style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>▲</span>
+                      </button>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
+                        {formatAddedLater(event.timestamp, event.afterthought.written_at, dayStartHour)}
+                      </span>
+                      <button
+                        onClick={() => startAfterthoughtEdit(event)}
+                        style={{ background: 'none', border: 'none', color: 'var(--primary-color, #2196f3)', cursor: 'pointer', fontSize: '0.78rem', marginLeft: 6, padding: 0 }}
+                      >
+                        Edit afterthought
+                      </button>
+                    </div>
+                  ) : (
+                    // Collapsed: one-line preview; tap to show full text, age and Edit
                     <button
-                      onClick={() => startAfterthoughtEdit(event)}
-                      style={{ background: 'none', border: 'none', color: 'var(--primary-color, #2196f3)', cursor: 'pointer', fontSize: '0.78rem', marginLeft: 6, padding: 0 }}
+                      className="afterthought-toggle"
+                      onClick={() => toggleAfterthought(event.id)}
+                      aria-expanded="false"
+                      style={{ display: 'flex', alignItems: 'baseline', gap: 6, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.85rem' }}
                     >
-                      Edit afterthought
+                      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>💭 {event.afterthought.text}</span>
+                      <span style={{ flexShrink: 0, color: 'var(--text-secondary)', fontSize: '0.7rem' }}>▼</span>
                     </button>
-                  </div>
+                  )
                 ) : (
                   <button
                     onClick={() => startAfterthoughtEdit(event)}
